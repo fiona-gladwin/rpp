@@ -7438,14 +7438,14 @@ RppStatus crop_i8_i8_host_tensor(Rpp8s *srcPtr,
 
 /************ resize ************/
 
-RppStatus resize_u8_u8_host_tensor(Rpp8u *srcPtr,
-                                   RpptDescPtr srcDescPtr,
-                                   Rpp8u *dstPtr,
-                                   RpptDescPtr dstDescPtr,
-                                   RpptImagePatchPtr dstImgSize,
-                                   RpptROIPtr roiTensorPtrSrc,
-                                   RpptRoiType roiType,
-                                   RppLayoutParams srcLayoutParams)
+RppStatus resize_bilinear_u8_u8_host_tensor(Rpp8u *srcPtr,
+                                            RpptDescPtr srcDescPtr,
+                                            Rpp8u *dstPtr,
+                                            RpptDescPtr dstDescPtr,
+                                            RpptImagePatchPtr dstImgSize,
+                                            RpptROIPtr roiTensorPtrSrc,
+                                            RpptRoiType roiType,
+                                            RppLayoutParams srcLayoutParams)
 {
     RpptROI roiDefault;
     RpptROIPtr roiPtrDefault;
@@ -7536,7 +7536,7 @@ omp_set_dynamic(0);
                 {
                     __m128 pRow[12], pPixels[3];
 
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], true);
+                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], xmm_p0, true);
                     compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
 
                     rpp_simd_load(rpp_bilinear_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
@@ -7549,7 +7549,7 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], true);
+                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], 0, true);
                     compute_bilinear_coefficients(weightParams, bilinearCoeffs);
                     compute_bilinear_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, bilinearCoeffs, dstPtrTempR, dstPtrTempG, dstPtrTempB);
 
@@ -7636,7 +7636,7 @@ omp_set_dynamic(0);
                 {
                     __m128 pRow[12], pPixels[3];
 
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], true);
+                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], xmm_p0, true);
                     compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
 
                     rpp_simd_load(rpp_bilinear_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
@@ -7647,7 +7647,7 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], true);
+                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], 0, true);
                     compute_bilinear_coefficients(weightParams, bilinearCoeffs);
                     compute_bilinear_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, bilinearCoeffs, &dstPtrTemp[0], &dstPtrTemp[1], &dstPtrTemp[2]);
 
@@ -7725,14 +7725,14 @@ omp_set_dynamic(0);
     return RPP_SUCCESS;
 }
 
-RppStatus resize_f32_f32_host_tensor(Rpp32f *srcPtr,
-                                     RpptDescPtr srcDescPtr,
-                                     Rpp32f *dstPtr,
-                                     RpptDescPtr dstDescPtr,
-                                     RpptImagePatchPtr dstImgSize,
-                                     RpptROIPtr roiTensorPtrSrc,
-                                     RpptRoiType roiType,
-                                     RppLayoutParams srcLayoutParams)
+RppStatus resize_bilinear_f32_f32_host_tensor(Rpp32f *srcPtr,
+                                              RpptDescPtr srcDescPtr,
+                                              Rpp32f *dstPtr,
+                                              RpptDescPtr dstDescPtr,
+                                              RpptImagePatchPtr dstImgSize,
+                                              RpptROIPtr roiTensorPtrSrc,
+                                              RpptRoiType roiType,
+                                              RppLayoutParams srcLayoutParams)
 {
     RpptROI roiDefault;
     RpptROIPtr roiPtrDefault;
@@ -7823,7 +7823,7 @@ omp_set_dynamic(0);
                 {
                     __m128 pRow[12], pPixels[3];
 
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], true);
+                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], xmm_p0, true);
                     compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
 
                     rpp_simd_load(rpp_bilinear_load_f32pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
@@ -7836,7 +7836,7 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], true);
+                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], 0, true);
                     compute_bilinear_coefficients(weightParams, bilinearCoeffs);
                     compute_bilinear_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, bilinearCoeffs, dstPtrTempR, dstPtrTempG, dstPtrTempB);
 
@@ -7923,7 +7923,7 @@ omp_set_dynamic(0);
                 {
                     __m128 pRow[12], pPixels[4];
 
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], true);
+                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], xmm_p0, true);
                     compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
 
                     rpp_simd_load(rpp_bilinear_load_f32pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
@@ -7934,7 +7934,7 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], true);
+                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], 0, true);
                     compute_bilinear_coefficients(weightParams, bilinearCoeffs);
                     compute_bilinear_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, bilinearCoeffs, &dstPtrTemp[0], &dstPtrTemp[1], &dstPtrTemp[2]);
 
@@ -8012,14 +8012,14 @@ omp_set_dynamic(0);
     return RPP_SUCCESS;
 }
 
-RppStatus resize_f16_f16_host_tensor(Rpp16f *srcPtr,
-                                     RpptDescPtr srcDescPtr,
-                                     Rpp16f *dstPtr,
-                                     RpptDescPtr dstDescPtr,
-                                     RpptImagePatchPtr dstImgSize,
-                                     RpptROIPtr roiTensorPtrSrc,
-                                     RpptRoiType roiType,
-                                     RppLayoutParams srcLayoutParams)
+RppStatus resize_bilinear_f16_f16_host_tensor(Rpp16f *srcPtr,
+                                              RpptDescPtr srcDescPtr,
+                                              Rpp16f *dstPtr,
+                                              RpptDescPtr dstDescPtr,
+                                              RpptImagePatchPtr dstImgSize,
+                                              RpptROIPtr roiTensorPtrSrc,
+                                              RpptRoiType roiType,
+                                              RppLayoutParams srcLayoutParams)
 {
     RpptROI roiDefault;
     RpptROIPtr roiPtrDefault;
@@ -8110,7 +8110,7 @@ omp_set_dynamic(0);
                 {
                     __m128 pRow[12], pPixels[3];
 
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], true);
+                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], xmm_p0, true);
                     compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
 
                     rpp_simd_load(rpp_bilinear_load_f16pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
@@ -8123,7 +8123,7 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], true);
+                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], 0, true);
                     compute_bilinear_coefficients(weightParams, bilinearCoeffs);
                     compute_bilinear_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, bilinearCoeffs, dstPtrTempR, dstPtrTempG, dstPtrTempB);
 
@@ -8210,7 +8210,7 @@ omp_set_dynamic(0);
                 {
                     __m128 pRow[12], pPixels[3];
 
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], true);
+                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], xmm_p0, true);
                     compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
 
                     rpp_simd_load(rpp_bilinear_load_f16pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
@@ -8221,7 +8221,7 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], true);
+                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], 0, true);
                     compute_bilinear_coefficients(weightParams, bilinearCoeffs);
                     compute_bilinear_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, bilinearCoeffs, &dstPtrTemp[0], &dstPtrTemp[1], &dstPtrTemp[2]);
 
@@ -8299,14 +8299,14 @@ omp_set_dynamic(0);
     return RPP_SUCCESS;
 }
 
-RppStatus resize_i8_i8_host_tensor(Rpp8s *srcPtr,
-                                   RpptDescPtr srcDescPtr,
-                                   Rpp8s *dstPtr,
-                                   RpptDescPtr dstDescPtr,
-                                   RpptImagePatchPtr dstImgSize,
-                                   RpptROIPtr roiTensorPtrSrc,
-                                   RpptRoiType roiType,
-                                   RppLayoutParams srcLayoutParams)
+RppStatus resize_bilinear_i8_i8_host_tensor(Rpp8s *srcPtr,
+                                            RpptDescPtr srcDescPtr,
+                                            Rpp8s *dstPtr,
+                                            RpptDescPtr dstDescPtr,
+                                            RpptImagePatchPtr dstImgSize,
+                                            RpptROIPtr roiTensorPtrSrc,
+                                            RpptRoiType roiType,
+                                            RppLayoutParams srcLayoutParams)
 {
     RpptROI roiDefault;
     RpptROIPtr roiPtrDefault;
@@ -8397,7 +8397,7 @@ omp_set_dynamic(0);
                 {
                     __m128 pRow[12], pPixels[3];
 
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], true);
+                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], xmm_p0, true);
                     compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
 
                     rpp_simd_load(rpp_bilinear_load_i8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
@@ -8410,7 +8410,7 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], true);
+                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], 0, true);
                     compute_bilinear_coefficients(weightParams, bilinearCoeffs);
                     compute_bilinear_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, bilinearCoeffs, dstPtrTempR, dstPtrTempG, dstPtrTempB);
 
@@ -8497,7 +8497,7 @@ omp_set_dynamic(0);
                 {
                     __m128 pRow[12], pPixels[3];
 
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], true);
+                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], xmm_p0, true);
                     compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
 
                     rpp_simd_load(rpp_bilinear_load_i8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
@@ -8508,7 +8508,7 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], true);
+                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], 0, true);
                     compute_bilinear_coefficients(weightParams, bilinearCoeffs);
                     compute_bilinear_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, bilinearCoeffs, &dstPtrTemp[0], &dstPtrTemp[1], &dstPtrTemp[2]);
 
@@ -8583,6 +8583,138 @@ omp_set_dynamic(0);
         }
     }
 
+    return RPP_SUCCESS;
+}
+
+RppStatus resize_lanczos_u8_u8_host_tensor(Rpp8u *srcPtr,
+                                           RpptDescPtr srcDescPtr,
+                                           Rpp8u *dstPtr,
+                                           RpptDescPtr dstDescPtr,
+                                           RpptImagePatchPtr dstImgSize,
+                                           RpptROIPtr roiTensorPtrSrc,
+                                           RpptRoiType roiType,
+                                           RppLayoutParams srcLayoutParams)
+{
+    RpptROI roiDefault;
+    RpptROIPtr roiPtrDefault;
+    roiPtrDefault = &roiDefault;
+    roiPtrDefault->xywhROI.xy.x = 0;
+    roiPtrDefault->xywhROI.xy.y = 0;
+    roiPtrDefault->xywhROI.roiWidth = srcDescPtr->w;
+    roiPtrDefault->xywhROI.roiHeight = srcDescPtr->h;
+
+omp_set_dynamic(0);
+#pragma omp parallel for num_threads(dstDescPtr->n)
+    for(int batchCount = 0; batchCount < dstDescPtr->n; batchCount++)
+    {
+        RpptROI roi;
+        RpptROIPtr roiPtr;
+
+        if (&roiTensorPtrSrc[batchCount] == NULL)
+        {
+            roiPtr = roiPtrDefault;
+        }
+        else
+        {
+            RpptROIPtr roiPtrInput = &roiTensorPtrSrc[batchCount];
+
+            RpptROI roiImage;
+            RpptROIPtr roiPtrImage;
+
+            if (roiType == RpptRoiType::LTRB)
+            {
+                roiPtrImage = &roiImage;
+                compute_xywh_from_ltrb_host(roiPtrInput, roiPtrImage);
+            }
+            else if (roiType == RpptRoiType::XYWH)
+            {
+                roiPtrImage = roiPtrInput;
+            }
+
+            roiPtr = &roi;
+            compute_roi_boundary_check_host(roiPtrImage, roiPtr, roiPtrDefault);
+        }
+        compute_dst_size_cap_host(&dstImgSize[batchCount], dstDescPtr);
+        Rpp32f wRatio = ((Rpp32f)(roiPtr->xywhROI.roiWidth)) / ((Rpp32f)(dstImgSize[batchCount].width));
+        Rpp32f hRatio = ((Rpp32f)(roiPtr->xywhROI.roiHeight)) / ((Rpp32f)(dstImgSize[batchCount].height));
+        Rpp32u heightLimit = roiPtr->xywhROI.roiHeight - 1;
+        Rpp32u widthLimit = roiPtr->xywhROI.roiWidth - 1;
+        Rpp32f hOffset = (hRatio - 1) * 0.5f;
+        Rpp32f wOffset = (wRatio - 1) * 0.5f;
+
+        Rpp8u *srcPtrChannel, *dstPtrChannel, *srcPtrImage, *dstPtrImage;
+        srcPtrImage = srcPtr + batchCount * srcDescPtr->strides.nStride;
+        dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
+        srcPtrChannel = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
+        dstPtrChannel = dstPtrImage;
+        Rpp32s srcLocationRowFloor, srcLocationColumnFloor;
+        Rpp32s widthLimitChanneled = widthLimit * 3;
+        Rpp32s srcLocCF[dstImgSize[batchCount].width];
+        Rpp32f weightParams[4];
+
+        // Resize with fused output-layout toggle (NHWC -> NCHW)
+        if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NCHW))
+        {
+            Rpp8u *srcRowPtrsForInterp[6];
+            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width], lanczosCoeffsY[6];
+            __m256 pRow[18];
+            Rpp8u *dstPtrRowR, *dstPtrRowG, *dstPtrRowB;
+            dstPtrRowR = dstPtrChannel;
+            dstPtrRowG = dstPtrRowR + dstDescPtr->strides.cStride;
+            dstPtrRowB = dstPtrRowG + dstDescPtr->strides.cStride;
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            {
+                compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset, true);
+                compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);
+            }
+            for(int i = 0; i < dstImgSize[batchCount].height; i++)
+            {
+                Rpp8u *dstPtrTempChn[3];
+                dstPtrTempChn[0] = dstPtrRowR;
+                dstPtrTempChn[1] = dstPtrRowG;
+                dstPtrTempChn[2] = dstPtrRowB;
+                compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
+                srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
+                srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
+                srcRowPtrsForInterp[3] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 1, 0, heightLimit) * srcDescPtr->strides.hStride);
+                srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
+                srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
+                compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
+                int vectorLoopCount = 0;
+#if __AVX2__
+                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
+                pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
+                pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
+                pLanczosCoeffY[3] = _mm256_set1_ps(lanczosCoeffsY[3]);
+                pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
+                pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                {
+                    pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    rpp_simd_load(rpp_lanczos3_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    dstPtrTempChn[0]++;
+                    dstPtrTempChn[1]++;
+                    dstPtrTempChn[2]++;
+                }
+#else
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                {
+                    compute_lanczos3_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn);
+                    dstPtrTempChn[0]++;
+                    dstPtrTempChn[1]++;
+                    dstPtrTempChn[2]++;
+                }
+#endif
+                dstPtrRowR += dstDescPtr->strides.hStride;
+                dstPtrRowG += dstDescPtr->strides.hStride;
+                dstPtrRowB += dstDescPtr->strides.hStride;
+            }
+        }
+    }
     return RPP_SUCCESS;
 }
 

@@ -89,7 +89,12 @@ const __m256i avx_px2 = _mm256_set1_epi32(2);
 const __m256i avx_px3 = _mm256_set1_epi32(3);
 const __m256i avx_px4 = _mm256_set1_epi32(4);
 const __m256i avx_px5 = _mm256_set1_epi32(5);
-
+const __m256i avx_maskR = _mm256_setr_epi8(0, 0x80, 0x80, 0x80, 3, 0x80, 0x80, 0x80, 6, 0x80, 0x80, 0x80, 9, 0x80, 0x80, 0x80,
+                                            12, 0x80, 0x80, 0x80, 15, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80);
+const __m256i avx_maskG = _mm256_setr_epi8(1, 0x80, 0x80, 0x80, 4, 0x80, 0x80, 0x80, 7, 0x80, 0x80, 0x80, 10, 0x80, 0x80, 0x80,
+                                            13, 0x80, 0x80, 0x80, 16, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80);
+const __m256i avx_maskB = _mm256_setr_epi8(2, 0x80, 0x80, 0x80, 5, 0x80, 0x80, 0x80, 8, 0x80, 0x80, 0x80, 11, 0x80, 0x80, 0x80,
+                                            14, 0x80, 0x80, 0x80, 17, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80);
 // Print helpers
 
 inline void rpp_mm_print_epi8(__m128i vPrintArray)
@@ -1746,4 +1751,36 @@ inline RppStatus rpp_store4_f32pln1_to_f16pln1(Rpp16f* dstPtr, __m128 p)
 
     return RPP_SUCCESS;
 }
+
+inline RppStatus rpp_lanczos3_load_u8pkd3_to_f32pln3(Rpp8u** srcRowPtrsForInterp, Rpp32s loc, __m256* p)
+{
+    __m256i pxTemp[6];
+    pxTemp[0] = _mm256_loadu_si256((__m256i *)(srcRowPtrsForInterp[0] + loc)); /* load [R01|G01|B01|R02|G02|B02|R03|G03 |B03|R04|G04|B04|R05|G05|B05|R06] - Need RGB 01-04 */
+    pxTemp[1] = _mm256_loadu_si256((__m256i *)(srcRowPtrsForInterp[1] + loc)); /* load [R11|G11|B11|R12|G12|B12|R13|G13 |B13|R14|G14|B14|R15|G15|B15|R16] - Need RGB 11-14 */
+    pxTemp[2] = _mm256_loadu_si256((__m256i *)(srcRowPtrsForInterp[2] + loc)); /* load [R21|G21|B21|R22|G22|B22|R23|G23 |B23|R24|G24|B24|R25|G25|B25|R26] - Need RGB 21-24 */
+    pxTemp[3] = _mm256_loadu_si256((__m256i *)(srcRowPtrsForInterp[3] + loc)); /* load [R31|G31|B31|R32|G32|B32|R33|G33 |B33|R34|G34|B34|R35|G35|B35|R36] - Need RGB 31-34 */
+    pxTemp[4] = _mm256_loadu_si256((__m256i *)(srcRowPtrsForInterp[4] + loc));
+    pxTemp[5] = _mm256_loadu_si256((__m256i *)(srcRowPtrsForInterp[5] + loc));
+    p[0] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[0], avx_maskR));
+    p[6] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[0], avx_maskG));
+    p[12] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[0], avx_maskB));
+    p[1] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[1], avx_maskR));
+    p[7] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[1], avx_maskG));
+    p[13] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[1], avx_maskB));
+    p[2] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[2], avx_maskR));
+    p[8] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[2], avx_maskG));
+    p[14] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[2], avx_maskB));
+    p[3] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[3], avx_maskR));
+    p[9] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[3], avx_maskG));
+    p[15] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[3], avx_maskB));
+    p[4] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[4], avx_maskR));
+    p[10] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[4], avx_maskG));
+    p[16] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[4], avx_maskB));
+    p[5] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[5], avx_maskR));
+    p[11] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[5], avx_maskG));
+    p[17] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp[5], avx_maskB));
+
+    return RPP_SUCCESS;
+}
+
 #endif //AMD_RPP_RPP_CPU_SIMD_HPP
