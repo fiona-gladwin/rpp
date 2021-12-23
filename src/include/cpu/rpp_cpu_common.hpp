@@ -4105,52 +4105,32 @@ inline void compute_lanczos3_coefficients(Rpp32f* coeffs, Rpp32f x)
 }
 
 template <typename T>
-inline void compute_lanczos3_interpolation_3c_pkd(T **srcRowPtrsForInterp, Rpp32s loc, Rpp32f *lanczosCoeffsX, Rpp32f *lanczosCoeffsY, T *dstPtrR, T *dstPtrG, T *dstPtrB)
+inline void compute_lanczos3_interpolation(T **srcRowPtrsForInterp, Rpp32s loc, Rpp32f *lanczosCoeffsX, Rpp32f *lanczosCoeffsY, T **dstPtr, Rpp32s channels, bool isPlanar=false)
 {
     Rpp32f pixels[6], pixel;
-    pixels[0] = pixels[1] = pixels[2] = pixels[3] = pixels[4] = pixels[5] = 0;
-    for(int k = 0; k < 6; k++)
+    int k3, rAdd;
+    for(int c = 0; c < channels; c++)
     {
-        int k3 = (k * 3);
-        pixels[0] += ((*(srcRowPtrsForInterp[0] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[1] += ((*(srcRowPtrsForInterp[1] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[2] += ((*(srcRowPtrsForInterp[2] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[3] += ((*(srcRowPtrsForInterp[3] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[4] += ((*(srcRowPtrsForInterp[4] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[5] += ((*(srcRowPtrsForInterp[5] + loc + k3)) * (lanczosCoeffsX[k]));
+        pixels[0] = pixels[1] = pixels[2] = pixels[3] = pixels[4] = pixels[5] = 0;
+        for(int k = 0; k < 6; k++)
+        {
+            k3 = isPlanar ? k : (k * channels) + c;
+            pixels[0] += ((*(srcRowPtrsForInterp[0] + loc + k3)) * (lanczosCoeffsX[k]));
+            pixels[1] += ((*(srcRowPtrsForInterp[1] + loc + k3)) * (lanczosCoeffsX[k]));
+            pixels[2] += ((*(srcRowPtrsForInterp[2] + loc + k3)) * (lanczosCoeffsX[k]));
+            pixels[3] += ((*(srcRowPtrsForInterp[3] + loc + k3)) * (lanczosCoeffsX[k]));
+            pixels[4] += ((*(srcRowPtrsForInterp[4] + loc + k3)) * (lanczosCoeffsX[k]));
+            pixels[5] += ((*(srcRowPtrsForInterp[5] + loc + k3)) * (lanczosCoeffsX[k]));
+        }
+        pixel = (pixels[0] * lanczosCoeffsY[0]) + (pixels[1] * lanczosCoeffsY[1]) + (pixels[2] * lanczosCoeffsY[2]) + (pixels[3] * lanczosCoeffsY[3]) + (pixels[4] * lanczosCoeffsY[4]) + (pixels[5] * lanczosCoeffsY[5]);
+        saturate_pixel(pixel, dstPtr[c]);
+        if(isPlanar)
+            srcRowPtrsForInterp += 6;
     }
-    pixel = (pixels[0] * lanczosCoeffsY[0]) + (pixels[1] * lanczosCoeffsY[1]) + (pixels[2] * lanczosCoeffsY[2]) + (pixels[3] * lanczosCoeffsY[3]) + (pixels[4] * lanczosCoeffsY[4]) + (pixels[5] * lanczosCoeffsY[5]);
-    saturate_pixel(pixel, dstPtrR);
-    pixels[0] = pixels[1] = pixels[2] = pixels[3] = pixels[4] = pixels[5] = 0;
-    for(int k = 0; k < 6; k++)
-    {
-        int k3 = (k * 3) + 1;
-        pixels[0] += ((*(srcRowPtrsForInterp[0] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[1] += ((*(srcRowPtrsForInterp[1] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[2] += ((*(srcRowPtrsForInterp[2] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[3] += ((*(srcRowPtrsForInterp[3] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[4] += ((*(srcRowPtrsForInterp[4] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[5] += ((*(srcRowPtrsForInterp[5] + loc + k3)) * (lanczosCoeffsX[k]));
-    }
-    pixel = (pixels[0] * lanczosCoeffsY[0]) + (pixels[1] * lanczosCoeffsY[1]) + (pixels[2] * lanczosCoeffsY[2]) + (pixels[3] * lanczosCoeffsY[3]) + (pixels[4] * lanczosCoeffsY[4]) + (pixels[5] * lanczosCoeffsY[5]);
-    saturate_pixel(pixel, dstPtrG);
-    pixels[0] = pixels[1] = pixels[2] = pixels[3] = pixels[4] = pixels[5] = 0;
-    for(int k = 0; k < 6; k++)
-    {
-        int k3 = (k * 3) + 2;
-        pixels[0] += ((*(srcRowPtrsForInterp[0] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[1] += ((*(srcRowPtrsForInterp[1] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[2] += ((*(srcRowPtrsForInterp[2] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[3] += ((*(srcRowPtrsForInterp[3] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[4] += ((*(srcRowPtrsForInterp[4] + loc + k3)) * (lanczosCoeffsX[k]));
-        pixels[5] += ((*(srcRowPtrsForInterp[5] + loc + k3)) * (lanczosCoeffsX[k]));
-    }
-    pixel = (pixels[0] * lanczosCoeffsY[0]) + (pixels[1] * lanczosCoeffsY[1]) + (pixels[2] * lanczosCoeffsY[2]) + (pixels[3] * lanczosCoeffsY[3]) + (pixels[4] * lanczosCoeffsY[4]) + (pixels[5] * lanczosCoeffsY[5]);
-    saturate_pixel(pixel, dstPtrB);
 }
 
 template <typename T>
-inline void compute_lanczos3_interpolation_3c_avx(__m256 *srcPixels, __m256 coeffs_x, __m256 *coeffs_y, T *dstPtrR, T *dstPtrG, T *dstPtrB)
+inline void compute_lanczos3_interpolation_3c_avx(__m256 *srcPixels, __m256 coeffs_x, __m256 *coeffs_y, T **dstPtr)
 {
     __m256 pTemp[3];
     float tempArr[8];
@@ -4163,7 +4143,7 @@ inline void compute_lanczos3_interpolation_3c_avx(__m256 *srcPixels, __m256 coef
     pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[1]);
     pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[2]);
     _mm256_storeu_ps(tempArr, pTemp[0]);
-    saturate_pixel((tempArr[0] + tempArr[1] + tempArr[2] + tempArr[3] + tempArr[4] + tempArr[5]), dstPtrR);
+    saturate_pixel((tempArr[0] + tempArr[1] + tempArr[2] + tempArr[3] + tempArr[4] + tempArr[5]), dstPtr[0]);
 
     pTemp[0] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[6], coeffs_x), coeffs_y[0]);
     pTemp[0] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[7], coeffs_x), coeffs_y[1], pTemp[0]);
@@ -4174,7 +4154,7 @@ inline void compute_lanczos3_interpolation_3c_avx(__m256 *srcPixels, __m256 coef
     pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[1]);
     pTemp[0]  = _mm256_add_ps(pTemp[0], pTemp[2]);
     _mm256_storeu_ps(tempArr, pTemp[0]);
-    saturate_pixel((tempArr[0] + tempArr[1] + tempArr[2] + tempArr[3] + tempArr[4] + tempArr[5]), dstPtrG);
+    saturate_pixel((tempArr[0] + tempArr[1] + tempArr[2] + tempArr[3] + tempArr[4] + tempArr[5]), dstPtr[1]);
 
     pTemp[0] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[12], coeffs_x), coeffs_y[0]);
     pTemp[0] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[13], coeffs_x), coeffs_y[1], pTemp[0]);
@@ -4185,7 +4165,7 @@ inline void compute_lanczos3_interpolation_3c_avx(__m256 *srcPixels, __m256 coef
     pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[1]);
     pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[2]);
     _mm256_storeu_ps(tempArr, pTemp[0]);
-    saturate_pixel((tempArr[0] + tempArr[1] + tempArr[2] + tempArr[3] + tempArr[4] + tempArr[5]), dstPtrB);
+    saturate_pixel((tempArr[0] + tempArr[1] + tempArr[2] + tempArr[3] + tempArr[4] + tempArr[5]), dstPtr[2]);
 }
 
 template <typename T>
