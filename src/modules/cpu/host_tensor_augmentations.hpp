@@ -8691,24 +8691,21 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[3] = _mm256_set1_ps(lanczosCoeffsY[3]);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
+#endif
+
                 for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
                 {
+#if __AVX2__
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
                     rpp_simd_load(rpp_lanczos3_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
                     compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
-                    dstPtrTempChn[0]++;
-                    dstPtrTempChn[1]++;
-                    dstPtrTempChn[2]++;
-                }
 #else
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
-                {
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c);
+#endif
                     dstPtrTempChn[0]++;
                     dstPtrTempChn[1]++;
                     dstPtrTempChn[2]++;
                 }
-#endif
                 dstPtrRowR += dstDescPtr->strides.hStride;
                 dstPtrRowG += dstDescPtr->strides.hStride;
                 dstPtrRowB += dstDescPtr->strides.hStride;
@@ -8766,26 +8763,22 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[3] = _mm256_set1_ps(lanczosCoeffsY[3]);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
+#endif
                 for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
                 {
+#if __AVX2__
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
                     rpp_simd_load(rpp_lanczos3_load_u8pln1_to_f32pln1, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
                     rpp_simd_load(rpp_lanczos3_load_u8pln1_to_f32pln1, srcRowPtrsForInterp + 6, srcLocCF[vectorLoopCount], pRow + 6);
                     rpp_simd_load(rpp_lanczos3_load_u8pln1_to_f32pln1, srcRowPtrsForInterp + 12, srcLocCF[vectorLoopCount], pRow + 12);
                     compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
-                    dstPtrTempChn[0] += 3;
-                    dstPtrTempChn[1] += 3;
-                    dstPtrTempChn[2] += 3;
-                }
 #else
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
-                {
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c, true);
+#endif
                     dstPtrTempChn[0] += 3;
                     dstPtrTempChn[1] += 3;
                     dstPtrTempChn[2] += 3;
                 }
-#endif
                 dstPtrRow += dstDescPtr->strides.hStride;
             }
         }
@@ -8827,24 +8820,20 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[3] = _mm256_set1_ps(lanczosCoeffsY[3]);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
+#endif
                 for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
                 {
+#if __AVX2__
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
                     rpp_simd_load(rpp_lanczos3_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
                     compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
-                    dstPtrTempChn[0] += 3;
-                    dstPtrTempChn[1] += 3;
-                    dstPtrTempChn[2] += 3;
-                }
 #else
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
-                {
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c);
+#endif
                     dstPtrTempChn[0] += 3;
                     dstPtrTempChn[1] += 3;
                     dstPtrTempChn[2] += 3;
                 }
-#endif
                 dstPtrRow += dstDescPtr->strides.hStride;
             }
         }
@@ -8899,32 +8888,26 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[3] = _mm256_set1_ps(lanczosCoeffsY[3]);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
+#endif
                 for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
                 {
                     Rpp8u *dstPtrTempChn;
                     dstPtrTempChn = dstPtrTemp;
+#if __AVX2__
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+#endif
                     for(int c = 0; c < dstDescPtr->c; c++)
                     {
+#if __AVX2__
                         rpp_simd_load(rpp_lanczos3_load_u8pln1_to_f32pln1, srcRowPtrsForInterp + (c * 6), srcLocCF[vectorLoopCount], pRow);
                         compute_lanczos3_interpolation_1c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
-                        dstPtrTempChn += dstDescPtr->strides.cStride;
-                    }
-                    dstPtrTemp++;
-                }
 #else
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
-                {
-                    Rpp8u *dstPtrTempChn;
-                    dstPtrTempChn = dstPtrTemp;
-                    for(int c = 0; c < dstDescPtr->c; c++)
-                    {
                         compute_lanczos3_interpolation(srcRowPtrsForInterp + (c * 6), srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, &dstPtrTempChn, 1);
+#endif
                         dstPtrTempChn += dstDescPtr->strides.cStride;
                     }
                     dstPtrTemp++;
                 }
-#endif
                 dstPtrRow += dstDescPtr->strides.hStride;
             }
         }
