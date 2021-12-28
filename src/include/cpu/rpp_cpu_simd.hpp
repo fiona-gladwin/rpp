@@ -1920,6 +1920,125 @@ inline RppStatus rpp_lanczos3_load_f32pln1_to_f32pln1(Rpp32f** srcRowPtrsForInte
     return RPP_SUCCESS;
 }
 
+inline RppStatus rpp_lanczos3_load_f16pkd3_to_f32pln3(Rpp16f** srcRowPtrsForInterp, Rpp32s loc, __m256* p)
+{
+    __m256i tempMask = _mm256_setr_epi32(0, 3, 1, 4, 2, 5, 6, 7);
+    __m256 pTemp[6];
+
+    Rpp32f tempRows[6][18];
+    /*Converts float16 pixels to float type for computation*/
+    for(int cnt = 0; cnt < 18; cnt++)
+    {
+        *(tempRows[0] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[0] + loc + cnt);
+        *(tempRows[1] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[1] + loc + cnt);
+        *(tempRows[2] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[2] + loc + cnt);
+        *(tempRows[3] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[3] + loc + cnt);
+        *(tempRows[4] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[4] + loc + cnt);
+        *(tempRows[5] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[5] + loc + cnt);
+    }
+    pTemp[0] = _mm256_loadu_ps(tempRows[0]); /* load [R01|R02|R03|R04|R05|R06|R07|R08 |R01|R02|R03|R04|R05|R06|R07|R08] - Need R 01-04 */
+    pTemp[1] = _mm256_loadu_ps(tempRows[0] + 6); /* load [R11|R12|R13|R14|R15|R16|R17|R18 |R11|R12|R13|R14|R15|R16|R17|R18] - Need R 11-14 */
+    pTemp[2] = _mm256_loadu_ps(tempRows[0] + 12); /* load [R21|R22|R23|R24|R25|R26|R27|R28 |R21|R22|R23|R24|R25|R26|R27|R28] - Need R 21-24 */
+    pTemp[0] = _mm256_permutevar8x32_ps(pTemp[0], tempMask); // R1 R2 G1 G2 B1 B2 X X
+    pTemp[1] = _mm256_permutevar8x32_ps(pTemp[1], tempMask); // R3 R4 G3 G4 B3 B4 X X
+    pTemp[2] = _mm256_permutevar8x32_ps(pTemp[2], tempMask); // R5 R6 G5 G6 B5 B6 X X
+    pTemp[3] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 68);    // R1 R2 R3 R4 B1 B2 B3 B4
+    pTemp[4] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 238);   // G1 G2 G3 G4 X  X  X  X
+    p[0] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 32);
+    // p[6] = _mm256_castsi256_ps(_mm256_insert_epi64(_mm256_castps_si256(pTemp[4]), _mm256_extract_epi64(_mm256_castps_si256(pTemp[2]), 1), 2));//
+    p[6] = _mm256_permute2f128_ps(pTemp[4], _mm256_castsi256_ps(_mm256_srli_si256(_mm256_castps_si256(pTemp[2]), 8)), 32);
+    p[12] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 49);
+
+    pTemp[0] = _mm256_loadu_ps(tempRows[1]); /* load [R01|R02|R03|R04|R05|R06|R07|R08 |R01|R02|R03|R04|R05|R06|R07|R08] - Need R 01-04 */
+    pTemp[1] = _mm256_loadu_ps(tempRows[1] + 6); /* load [R11|R12|R13|R14|R15|R16|R17|R18 |R11|R12|R13|R14|R15|R16|R17|R18] - Need R 11-14 */
+    pTemp[2] = _mm256_loadu_ps(tempRows[1] + 12); /* load [R21|R22|R23|R24|R25|R26|R27|R28 |R21|R22|R23|R24|R25|R26|R27|R28] - Need R 21-24 */
+    pTemp[0] = _mm256_permutevar8x32_ps(pTemp[0], tempMask); // R1 R2 G1 G2 B1 B2 X X
+    pTemp[1] = _mm256_permutevar8x32_ps(pTemp[1], tempMask); // R3 R4 G3 G4 B3 B4 X X
+    pTemp[2] = _mm256_permutevar8x32_ps(pTemp[2], tempMask); // R5 R6 G5 G6 B5 B6 X X
+    pTemp[3] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 68);    // R1 R2 R3 R4 B1 B2 B3 B4
+    pTemp[4] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 238);   // G1 G2 G3 G4 X  X  X  X
+    p[1] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 32);
+    // p[7] = _mm256_castsi256_ps(_mm256_insert_epi64(_mm256_castps_si256(pTemp[4]), _mm256_extract_epi64(_mm256_castps_si256(pTemp[2]), 1), 2));//
+    p[7] = _mm256_permute2f128_ps(pTemp[4], _mm256_castsi256_ps(_mm256_srli_si256(_mm256_castps_si256(pTemp[2]), 8)), 32);
+    p[13] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 49);
+
+    pTemp[0] = _mm256_loadu_ps(tempRows[2]); /* load [R01|R02|R03|R04|R05|R06|R07|R08 |R01|R02|R03|R04|R05|R06|R07|R08] - Need R 01-04 */
+    pTemp[1] = _mm256_loadu_ps(tempRows[2] + 6); /* load [R11|R12|R13|R14|R15|R16|R17|R18 |R11|R12|R13|R14|R15|R16|R17|R18] - Need R 11-14 */
+    pTemp[2] = _mm256_loadu_ps(tempRows[2] + 12); /* load [R21|R22|R23|R24|R25|R26|R27|R28 |R21|R22|R23|R24|R25|R26|R27|R28] - Need R 21-24 */
+    pTemp[0] = _mm256_permutevar8x32_ps(pTemp[0], tempMask); // R1 R2 G1 G2 B1 B2 X X
+    pTemp[1] = _mm256_permutevar8x32_ps(pTemp[1], tempMask); // R3 R4 G3 G4 B3 B4 X X
+    pTemp[2] = _mm256_permutevar8x32_ps(pTemp[2], tempMask); // R5 R6 G5 G6 B5 B6 X X
+    pTemp[3] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 68);    // R1 R2 R3 R4 B1 B2 B3 B4
+    pTemp[4] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 238);   // G1 G2 G3 G4 X  X  X  X
+    p[2] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 32);
+    // p[8] = _mm256_castsi256_ps(_mm256_insert_epi64(_mm256_castps_si256(pTemp[4]), _mm256_extract_epi64(_mm256_castps_si256(pTemp[2]), 1), 2));//
+    p[8] = _mm256_permute2f128_ps(pTemp[4], _mm256_castsi256_ps(_mm256_srli_si256(_mm256_castps_si256(pTemp[2]), 8)), 32);
+    p[14] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 49);
+
+    pTemp[0] = _mm256_loadu_ps(tempRows[3]); /* load [R01|R02|R03|R04|R05|R06|R07|R08 |R01|R02|R03|R04|R05|R06|R07|R08] - Need R 01-04 */
+    pTemp[1] = _mm256_loadu_ps(tempRows[3] + 6); /* load [R11|R12|R13|R14|R15|R16|R17|R18 |R11|R12|R13|R14|R15|R16|R17|R18] - Need R 11-14 */
+    pTemp[2] = _mm256_loadu_ps(tempRows[3] + 12); /* load [R21|R22|R23|R24|R25|R26|R27|R28 |R21|R22|R23|R24|R25|R26|R27|R28] - Need R 21-24 */
+    pTemp[0] = _mm256_permutevar8x32_ps(pTemp[0], tempMask); // R1 R2 G1 G2 B1 B2 X X
+    pTemp[1] = _mm256_permutevar8x32_ps(pTemp[1], tempMask); // R3 R4 G3 G4 B3 B4 X X
+    pTemp[2] = _mm256_permutevar8x32_ps(pTemp[2], tempMask); // R5 R6 G5 G6 B5 B6 X X
+    pTemp[3] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 68);    // R1 R2 R3 R4 B1 B2 B3 B4
+    pTemp[4] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 238);   // G1 G2 G3 G4 X  X  X  X
+    p[3] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 32);
+    // p[9] = _mm256_castsi256_ps(_mm256_insert_epi64(_mm256_castps_si256(pTemp[4]), _mm256_extract_epi64(_mm256_castps_si256(pTemp[2]), 1), 2));//
+    p[9] = _mm256_permute2f128_ps(pTemp[4], _mm256_castsi256_ps(_mm256_srli_si256(_mm256_castps_si256(pTemp[2]), 8)), 32);
+    p[15] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 49);
+
+    pTemp[0] = _mm256_loadu_ps(tempRows[4]); /* load [R01|R02|R03|R04|R05|R06|R07|R08 |R01|R02|R03|R04|R05|R06|R07|R08] - Need R 01-04 */
+    pTemp[1] = _mm256_loadu_ps(tempRows[4] + 6); /* load [R11|R12|R13|R14|R15|R16|R17|R18 |R11|R12|R13|R14|R15|R16|R17|R18] - Need R 11-14 */
+    pTemp[2] = _mm256_loadu_ps(tempRows[4] + 12); /* load [R21|R22|R23|R24|R25|R26|R27|R28 |R21|R22|R23|R24|R25|R26|R27|R28] - Need R 21-24 */
+    pTemp[0] = _mm256_permutevar8x32_ps(pTemp[0], tempMask); // R1 R2 G1 G2 B1 B2 X X
+    pTemp[1] = _mm256_permutevar8x32_ps(pTemp[1], tempMask); // R3 R4 G3 G4 B3 B4 X X
+    pTemp[2] = _mm256_permutevar8x32_ps(pTemp[2], tempMask); // R5 R6 G5 G6 B5 B6 X X
+    pTemp[3] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 68);    // R1 R2 R3 R4 B1 B2 B3 B4
+    pTemp[4] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 238);   // G1 G2 G3 G4 X  X  X  X
+    p[4] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 32);
+    // p[10] = _mm256_castsi256_ps(_mm256_insert_epi64(_mm256_castps_si256(pTemp[4]), _mm256_extract_epi64(_mm256_castps_si256(pTemp[2]), 1), 2));//
+    p[10] = _mm256_permute2f128_ps(pTemp[4], _mm256_castsi256_ps(_mm256_srli_si256(_mm256_castps_si256(pTemp[2]), 8)), 32);
+    p[16] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 49);
+
+    pTemp[0] = _mm256_loadu_ps(tempRows[5]); /* load [R01|R02|R03|R04|R05|R06|R07|R08 |R01|R02|R03|R04|R05|R06|R07|R08] - Need R 01-04 */
+    pTemp[1] = _mm256_loadu_ps(tempRows[5] + 6); /* load [R11|R12|R13|R14|R15|R16|R17|R18 |R11|R12|R13|R14|R15|R16|R17|R18] - Need R 11-14 */
+    pTemp[2] = _mm256_loadu_ps(tempRows[5] + 12); /* load [R21|R22|R23|R24|R25|R26|R27|R28 |R21|R22|R23|R24|R25|R26|R27|R28] - Need R 21-24 */
+    pTemp[0] = _mm256_permutevar8x32_ps(pTemp[0], tempMask); // R1 R2 G1 G2 B1 B2 X X
+    pTemp[1] = _mm256_permutevar8x32_ps(pTemp[1], tempMask); // R3 R4 G3 G4 B3 B4 X X
+    pTemp[2] = _mm256_permutevar8x32_ps(pTemp[2], tempMask); // R5 R6 G5 G6 B5 B6 X X
+    pTemp[3] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 68);    // R1 R2 R3 R4 B1 B2 B3 B4
+    pTemp[4] = _mm256_shuffle_ps(pTemp[0], pTemp[1], 238);   // G1 G2 G3 G4 X  X  X  X
+    p[5] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 32);
+    // p[11] = _mm256_castsi256_ps(_mm256_insert_epi64(_mm256_castps_si256(pTemp[4]), _mm256_extract_epi64(_mm256_castps_si256(pTemp[2]), 1), 2));//
+    p[11] = _mm256_permute2f128_ps(pTemp[4], _mm256_castsi256_ps(_mm256_srli_si256(_mm256_castps_si256(pTemp[2]), 8)), 32);
+    p[17] = _mm256_permute2f128_ps(pTemp[3], pTemp[2], 49);
+    return RPP_SUCCESS;
+}
+
+inline RppStatus rpp_lanczos3_load_f16pln1_to_f32pln1(Rpp16f** srcRowPtrsForInterp, Rpp32s loc, __m256* p)
+{
+    Rpp32f tempRows[6][6];
+    /*Converts float16 pixels to float type for computation*/
+    for(int cnt = 0; cnt < 6; cnt++)
+    {
+        *(tempRows[0] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[0] + loc + cnt);
+        *(tempRows[1] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[1] + loc + cnt);
+        *(tempRows[2] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[2] + loc + cnt);
+        *(tempRows[3] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[3] + loc + cnt);
+        *(tempRows[4] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[4] + loc + cnt);
+        *(tempRows[5] + cnt) = (Rpp32f) *(srcRowPtrsForInterp[5] + loc + cnt);
+    }
+    p[0] = _mm256_loadu_ps(tempRows[0]); /* load [R01|R02|R03|R04|R05|R06|R07|R08 |R01|R02|R03|R04|R05|R06|R07|R08] - Need R 01-04 */
+    p[1] = _mm256_loadu_ps(tempRows[1]); /* load [R11|R12|R13|R14|R15|R16|R17|R18 |R11|R12|R13|R14|R15|R16|R17|R18] - Need R 11-14 */
+    p[2] = _mm256_loadu_ps(tempRows[2]); /* load [R21|R22|R23|R24|R25|R26|R27|R28 |R21|R22|R23|R24|R25|R26|R27|R28] - Need R 21-24 */
+    p[3] = _mm256_loadu_ps(tempRows[3]); /* load [R31|R32|R33|R34|R35|R36|R37|R38 |R31|R32|R33|R34|R35|R36|R37|R38] - Need R 31-34 */
+    p[4] = _mm256_loadu_ps(tempRows[4]); /* load [R31|R32|R33|R34|R35|R36|R37|R38 |R31|R32|R33|R34|R35|R36|R37|R38] - Need R 31-34 */
+    p[5] = _mm256_loadu_ps(tempRows[5]); /* load [R31|R32|R33|R34|R35|R36|R37|R38 |R31|R32|R33|R34|R35|R36|R37|R38] - Need R 31-34 */
+
+    return RPP_SUCCESS;
+}
+
 inline RppStatus rpp_lanczos3_load_i8pkd3_to_f32pln3(Rpp8s** srcRowPtrsForInterp, Rpp32s loc, __m256* p)
 {
     __m256i pxTemp[6];
