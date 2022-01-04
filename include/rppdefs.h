@@ -263,6 +263,14 @@ typedef struct
     Rpp32u height;
 } RpptImagePatch, *RpptImagePatchPtr;
 
+typedef enum
+{
+    NEAREST_NEIGHBOR,
+    BILINEAR,
+    BICUBIC,
+    LANCZOS
+} RpptInterpolationType;
+
 /******************** HOST memory typedefs ********************/
 
 typedef struct
