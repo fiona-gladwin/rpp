@@ -7497,7 +7497,6 @@ omp_set_dynamic(0);
         dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
         srcPtrChannel = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
         dstPtrChannel = dstPtrImage;
-        Rpp32f srcLocationRow, srcLocationColumn, pixel;
         Rpp32s srcLocationRowFloor, srcLocationColumnFloor;
         Rpp32u alignedLength = dstImgSize[batchCount].width & ~3;
         __m128 pWRatio = _mm_set1_ps(wRatio);
@@ -7784,7 +7783,6 @@ omp_set_dynamic(0);
         dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
         srcPtrChannel = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
         dstPtrChannel = dstPtrImage;
-        Rpp32f srcLocationRow, srcLocationColumn, pixel;
         Rpp32s srcLocationRowFloor, srcLocationColumnFloor;
         Rpp32u alignedLength = dstImgSize[batchCount].width & ~3;
         __m128 pWRatio = _mm_set1_ps(wRatio);
@@ -8071,7 +8069,6 @@ omp_set_dynamic(0);
         dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
         srcPtrChannel = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
         dstPtrChannel = dstPtrImage;
-        Rpp32f srcLocationRow, srcLocationColumn, pixel;
         Rpp32s srcLocationRowFloor, srcLocationColumnFloor;
         Rpp32u alignedLength = dstImgSize[batchCount].width & ~3;
         __m128 pWRatio = _mm_set1_ps(wRatio);
@@ -8358,7 +8355,6 @@ omp_set_dynamic(0);
         dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
         srcPtrChannel = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
         dstPtrChannel = dstPtrImage;
-        Rpp32f srcLocationRow, srcLocationColumn, pixel;
         Rpp32s srcLocationRowFloor, srcLocationColumnFloor;
         Rpp32u alignedLength = dstImgSize[batchCount].width & ~3;
         __m128 pWRatio = _mm_set1_ps(wRatio);
@@ -8602,6 +8598,7 @@ RppStatus resize_gaussian_u8_u8_host_tensor(Rpp8u *srcPtr,
     roiPtrDefault->xywhROI.xy.y = 0;
     roiPtrDefault->xywhROI.roiWidth = srcDescPtr->w;
     roiPtrDefault->xywhROI.roiHeight = srcDescPtr->h;
+    std::cerr << "GAUSSIAN U8\n";
 
 omp_set_dynamic(0);
 #pragma omp parallel for num_threads(dstDescPtr->n)
@@ -8649,14 +8646,19 @@ omp_set_dynamic(0);
         dstPtrChannel = dstPtrImage;
         Rpp32s srcLocationRowFloor, srcLocationColumnFloor;
         Rpp32s widthLimitChanneled = widthLimit * 3;
-        Rpp32s srcLocCF[dstImgSize[batchCount].width];
+        Rpp32u alignedLength = dstImgSize[batchCount].width & ~3;
+        __m128 pWRatio = _mm_set1_ps(wRatio);
+        __m128 pDstLocInit = _mm_setr_ps(0, 1, 2, 3);
+        __m128 pWidthLimit = _mm_set1_ps((float)widthLimit);
+        __m128 pWOffset = _mm_set1_ps(wOffset);
+        __m128 pWeightParams[4], pGaussianCoeffs[4], pColFloor, pDstLoc;
+        __m128i pxColFloor;
+        Rpp32s srcLocCF[4] = {0};
         Rpp32f weightParams[4], gaussianCoeffs[4];
 
         // Resize with fused output-layout toggle (NHWC -> NCHW)
         if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NCHW))
         {
-            Rpp8u *srcRowPtrsForInterp[2];
-            // __m256 pRow[18];
             Rpp8u *dstPtrRowR, *dstPtrRowG, *dstPtrRowB;
             dstPtrRowR = dstPtrChannel;
             dstPtrRowG = dstPtrRowR + dstDescPtr->strides.cStride;
@@ -8667,11 +8669,31 @@ omp_set_dynamic(0);
                 dstPtrTempChn[0] = dstPtrRowR;
                 dstPtrTempChn[1] = dstPtrRowG;
                 dstPtrTempChn[2] = dstPtrRowB;
+
+                Rpp8u *srcRowPtrsForInterp[2];
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
+                pWeightParams[0] = _mm_set1_ps(weightParams[0]);
+                pWeightParams[1]  = _mm_set1_ps(weightParams[1]);
+                pDstLoc = pDstLocInit;
 
                 int vectorLoopCount = 0;
+                for (; vectorLoopCount < alignedLength; vectorLoopCount += 4)
+                {
+                    __m128 pRow[12], pPixels[3];
+
+                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], pWOffset, true);
+                    compute_gaussian_coefficients_sse(pWeightParams, pGaussianCoeffs);
+
+                    rpp_simd_load(rpp_bilinear_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
+                    compute_bilinear_interpolation_3c_sse(pRow, pGaussianCoeffs, pPixels);
+                    rpp_simd_store(rpp_store12_f32pln3_to_u8pln3, dstPtrTempChn[0], dstPtrTempChn[1], dstPtrTempChn[2], pPixels);
+
+                    dstPtrTempChn[0] += 4;
+                    dstPtrTempChn[1] += 4;
+                    dstPtrTempChn[2] += 4;
+                }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
                     compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], wOffset, true);
