@@ -4082,106 +4082,44 @@ inline void compute_bilinear_interpolation_1c(T **srcRowPtrsForInterp, Rpp32s lo
                   ((*(srcRowPtrsForInterp[1] + loc + 1)) * bilinearCoeffs[3]));
 }
 
-inline Rpp32f sinc(Rpp32f x)
+inline void compute_gaussian_coefficients(Rpp32f *weightParams, Rpp32f *gaussianCoeffs)
 {
-    x *= PI;
-    if (std::abs(x) < 1e-5f)
-        return 1.0f - x * x * 0.1666666f;  // remove singularity by using Taylor expansion
-    return std::sin(x) / x;
+    float sigma = 0.5f;
+    float sigmap2_1 = 1 / (sigma * sigma * -1 * 2);
+    float inv_sqrt2pi_sigma = 0.3989422804014327f / sigma;
+    float c1 = inv_sqrt2pi_sigma * expf(weightParams[1] * weightParams[1] * sigmap2_1);
+    float c2 = inv_sqrt2pi_sigma * expf(weightParams[0] * weightParams[0] * sigmap2_1);
+    float c3 = inv_sqrt2pi_sigma * expf(weightParams[3] * weightParams[3] * sigmap2_1);
+    float c4 = inv_sqrt2pi_sigma * expf(weightParams[2] * weightParams[2] * sigmap2_1);
+    gaussianCoeffs[0] = c2 * c4;
+    gaussianCoeffs[1] = c2 * c3;
+    gaussianCoeffs[2] = c1 * c4;
+    gaussianCoeffs[3] = c1 * c3;
 }
 
-inline void compute_lanczos3_coefficients(Rpp32f* coeffs, Rpp32f x)
-{
-    float sum = 0;
-    for(int i=0; i < 6; i++)
-    {
-        float xTemp = x - i + 2;
-        coeffs[i] = fabs(xTemp) >= 3 ? 0.0f : (sinc(xTemp)*sinc(xTemp / 3));
-        sum += coeffs[i];
-    }
-    sum = 1.f/sum;
-    for(int i = 0; i < 6; i++ )
-        coeffs[i] *= sum;
-}
+// inline void compute_gaussian_coefficients_sse(__m128 *pWeightParams, __m128 *pBilinearCoeffs)
+// {
+//     pBilinearCoeffs[0] = _mm_mul_ps(pWeightParams[1], pWeightParams[3]);    /* (1 - weightedHeight) * (1 - weightedWidth) */
+//     pBilinearCoeffs[1] = _mm_mul_ps(pWeightParams[1], pWeightParams[2]);    /* (1 - weightedHeight) * weightedWidth */
+//     pBilinearCoeffs[2] = _mm_mul_ps(pWeightParams[0], pWeightParams[3]);    /* weightedHeight * (1 - weightedWidth) */
+//     pBilinearCoeffs[3] = _mm_mul_ps(pWeightParams[0], pWeightParams[2]);    /* weightedHeight * weightedWidth */
+// }
 
 template <typename T>
-inline void compute_lanczos3_interpolation(T **srcRowPtrsForInterp, Rpp32s loc, Rpp32f *lanczosCoeffsX, Rpp32f *lanczosCoeffsY, T **dstPtr, Rpp32s channels, bool isPlanar=false)
+inline void compute_gaussian_interpolation_3c_pkd(T **srcRowPtrsForInterp, Rpp32s loc, Rpp32f *gaussianCoeffs, T *dstPtrR, T *dstPtrG, T *dstPtrB)
 {
-    Rpp32f pixels[6], pixel;
-    int k3, rAdd;
-    for(int c = 0; c < channels; c++)
-    {
-        pixels[0] = pixels[1] = pixels[2] = pixels[3] = pixels[4] = pixels[5] = 0;
-        for(int k = 0; k < 6; k++)
-        {
-            k3 = isPlanar ? k : (k * channels) + c;
-            pixels[0] += ((*(srcRowPtrsForInterp[0] + loc + k3)) * (lanczosCoeffsX[k]));
-            pixels[1] += ((*(srcRowPtrsForInterp[1] + loc + k3)) * (lanczosCoeffsX[k]));
-            pixels[2] += ((*(srcRowPtrsForInterp[2] + loc + k3)) * (lanczosCoeffsX[k]));
-            pixels[3] += ((*(srcRowPtrsForInterp[3] + loc + k3)) * (lanczosCoeffsX[k]));
-            pixels[4] += ((*(srcRowPtrsForInterp[4] + loc + k3)) * (lanczosCoeffsX[k]));
-            pixels[5] += ((*(srcRowPtrsForInterp[5] + loc + k3)) * (lanczosCoeffsX[k]));
-        }
-        pixel = (pixels[0] * lanczosCoeffsY[0]) + (pixels[1] * lanczosCoeffsY[1]) + (pixels[2] * lanczosCoeffsY[2]) + (pixels[3] * lanczosCoeffsY[3]) + (pixels[4] * lanczosCoeffsY[4]) + (pixels[5] * lanczosCoeffsY[5]);
-        saturate_pixel(pixel, dstPtr[c]);
-        if(isPlanar)
-            srcRowPtrsForInterp += 6;
-    }
-}
-
-template <typename T>
-inline void compute_lanczos3_interpolation_3c_avx(__m256 *srcPixels, __m256 coeffs_x, __m256 *coeffs_y, T **dstPtr)
-{
-    __m256 pTemp[3];
-    float tempArr[8];
-    pTemp[0] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[0], coeffs_x), coeffs_y[0]);
-    pTemp[0] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[1], coeffs_x), coeffs_y[1], pTemp[0]);
-    pTemp[1] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[2], coeffs_x), coeffs_y[2]);
-    pTemp[1] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[3], coeffs_x), coeffs_y[3], pTemp[1]);
-    pTemp[2] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[4], coeffs_x), coeffs_y[4]);
-    pTemp[2] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[5], coeffs_x), coeffs_y[5], pTemp[2]);
-    pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[1]);
-    pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[2]);
-    _mm256_storeu_ps(tempArr, pTemp[0]);
-    saturate_pixel((tempArr[0] + tempArr[1] + tempArr[2] + tempArr[3] + tempArr[4] + tempArr[5]), dstPtr[0]);
-
-    pTemp[0] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[6], coeffs_x), coeffs_y[0]);
-    pTemp[0] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[7], coeffs_x), coeffs_y[1], pTemp[0]);
-    pTemp[1] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[8], coeffs_x), coeffs_y[2]);
-    pTemp[1] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[9], coeffs_x), coeffs_y[3], pTemp[1]);
-    pTemp[2] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[10], coeffs_x), coeffs_y[4]);
-    pTemp[2] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[11], coeffs_x), coeffs_y[5], pTemp[2]);
-    pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[1]);
-    pTemp[0]  = _mm256_add_ps(pTemp[0], pTemp[2]);
-    _mm256_storeu_ps(tempArr, pTemp[0]);
-    saturate_pixel((tempArr[0] + tempArr[1] + tempArr[2] + tempArr[3] + tempArr[4] + tempArr[5]), dstPtr[1]);
-
-    pTemp[0] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[12], coeffs_x), coeffs_y[0]);
-    pTemp[0] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[13], coeffs_x), coeffs_y[1], pTemp[0]);
-    pTemp[1] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[14], coeffs_x), coeffs_y[2]);
-    pTemp[1] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[15], coeffs_x), coeffs_y[3], pTemp[1]);
-    pTemp[2] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[16], coeffs_x), coeffs_y[4]);
-    pTemp[2] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[17], coeffs_x), coeffs_y[5], pTemp[2]);
-    pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[1]);
-    pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[2]);
-    _mm256_storeu_ps(tempArr, pTemp[0]);
-    saturate_pixel((tempArr[0] + tempArr[1] + tempArr[2] + tempArr[3] + tempArr[4] + tempArr[5]), dstPtr[2]);
-}
-
-template <typename T>
-inline void compute_lanczos3_interpolation_1c_avx(__m256 *srcPixels, __m256 coeffs_x, __m256 *coeffs_y, T *dstPtr)
-{
-    __m256 pTemp[3];
-    float tempArr[8];
-    pTemp[0] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[0], coeffs_x), coeffs_y[0]);
-    pTemp[0] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[1], coeffs_x), coeffs_y[1], pTemp[0]);
-    pTemp[1] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[2], coeffs_x), coeffs_y[2]);
-    pTemp[1] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[3], coeffs_x), coeffs_y[3], pTemp[1]);
-    pTemp[2] = _mm256_mul_ps(_mm256_mul_ps(srcPixels[4], coeffs_x), coeffs_y[4]);
-    pTemp[2] = _mm256_fmadd_ps(_mm256_mul_ps(srcPixels[5], coeffs_x), coeffs_y[5], pTemp[2]);
-    pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[1]);
-    pTemp[0] = _mm256_add_ps(pTemp[0], pTemp[2]);
-    _mm256_storeu_ps(tempArr, pTemp[0]);
-    saturate_pixel((tempArr[0] + tempArr[1] + tempArr[2] + tempArr[3] + tempArr[4] + tempArr[5]), dstPtr);
+    Rpp32s channels = 3;
+    saturate_pixel(((*(srcRowPtrsForInterp[0] + loc)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[0] + loc + 3)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[1] + loc)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 3)) * gaussianCoeffs[3]), dstPtrR);
+    saturate_pixel(((*(srcRowPtrsForInterp[0] + loc + 1)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[0] + loc + 4)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 1)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 4)) * gaussianCoeffs[3]), dstPtrG);
+    saturate_pixel(((*(srcRowPtrsForInterp[0] + loc + 2)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[0] + loc + 5)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 2)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 5)) * gaussianCoeffs[3]), dstPtrB);
 }
 #endif //RPP_CPU_COMMON_H
