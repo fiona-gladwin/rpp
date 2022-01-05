@@ -4082,4 +4082,23 @@ inline void compute_bilinear_interpolation_1c(T **srcRowPtrsForInterp, Rpp32s lo
                   ((*(srcRowPtrsForInterp[1] + loc + 1)) * bilinearCoeffs[3]));
 }
 
+inline void compute_triangular_coefficient(Rpp32f weight, Rpp32f *coeff)
+{
+    *coeff = 1 - std::fabs(weight);
+    *coeff = *coeff < 0 ? 0 : *coeff;
+}
+
+inline void compute_index_and_weights(Rpp32s loc, Rpp32f weight, Rpp32s kernelSize, Rpp32s limit, Rpp32s *index, Rpp32f *coeffs, bool isPacked = false)
+{
+    Rpp32f kernelSize2 = kernelSize / 2;
+    Rpp32s channels = isPacked ? 3 : 1;
+    Rpp32f kernelSize2Channel = kernelSize2 * channels;
+    limit = limit * channels;
+    for(int k = 0; k < kernelSize; k++)
+    {
+        index[k] = RPPPRANGECHECKINT((int)(loc + (k * channels) - kernelSize2Channel), 0, limit);
+        compute_triangular_coefficient(weight - k + kernelSize2 , coeffs + k);
+    }
+}
+
 #endif //RPP_CPU_COMMON_H
