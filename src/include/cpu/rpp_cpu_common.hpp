@@ -3985,15 +3985,13 @@ inline void compute_dst_size_cap_host(RpptImagePatchPtr dstImgSize, RpptDescPtr 
     dstImgSize->height = std::min(dstImgSize->height, dstDescPtr->h);
 }
 
-inline void compute_resize_src_loc(Rpp32s dstLocation, Rpp32f scale, Rpp32u limit, Rpp32s &srcLoc, Rpp32f *weight, Rpp32f offset = 0, bool hasRGBChannels = false)
+inline void compute_resize_src_loc(Rpp32s dstLocation, Rpp32f scale, Rpp32u limit, Rpp32s &srcLoc, Rpp32f *weight, Rpp32f offset = 0, Rpp32u srcStride = 1)
 {
     Rpp32f srcLocation = ((Rpp32f) dstLocation) * scale + offset;
     Rpp32s srcLocationFloor = (Rpp32s) RPPFLOOR(srcLocation);
     weight[0] = srcLocation - srcLocationFloor;
     weight[1] = 1 - weight[0];
-    srcLoc = (srcLocationFloor > limit) ? limit : srcLocationFloor;
-    if(hasRGBChannels)
-        srcLoc = srcLoc * 3;
+    srcLoc = ((srcLocationFloor > limit) ? limit : srcLocationFloor) * srcStride;
 }
 
 inline void compute_resize_src_loc_sse(__m128 &pDstLoc, __m128 &pScale, __m128 &pLimit, Rpp32s *srcLoc, __m128 *pWeight, __m128 pOffset = xmm_p0, bool hasRGBChannels = false)
@@ -4088,16 +4086,79 @@ inline void compute_triangular_coefficient(Rpp32f weight, Rpp32f *coeff)
     *coeff = *coeff < 0 ? 0 : *coeff;
 }
 
-inline void compute_index_and_weights(Rpp32s loc, Rpp32f weight, Rpp32s kernelSize, Rpp32s limit, Rpp32s *index, Rpp32f *coeffs, bool isPacked = false)
+inline void compute_index_and_weights(Rpp32s loc, Rpp32f weight, Rpp32s kernelSize, Rpp32s limit, Rpp32s *index, Rpp32f *coeffs, Rpp32u srcStride = 1)
 {
     Rpp32f kernelSize2 = kernelSize / 2;
-    Rpp32s channels = isPacked ? 3 : 1;
-    Rpp32f kernelSize2Channel = kernelSize2 * channels;
-    limit = limit * channels;
+    Rpp32f kernelSize2Channel = kernelSize2 * srcStride;
+    limit = limit * srcStride;
     for(int k = 0; k < kernelSize; k++)
     {
-        index[k] = RPPPRANGECHECKINT((int)(loc + (k * channels) - kernelSize2Channel), 0, limit);
+        index[k] = RPPPRANGECHECKINT((int)(loc + (k * srcStride) - kernelSize2Channel), 0, limit);
         compute_triangular_coefficient(weight - k + kernelSize2 , coeffs + k);
+    }
+}
+
+template <typename T>
+inline void resize_generic_host_kernel(T **srcPtr, RpptDescPtr srcDescPtr, T **dstPtr, RpptDescPtr dstDescPtr, RpptImagePatch dstImgSize,
+                                       Rpp32f hRatio, Rpp32f wRatio, Rpp32s heightLimit, Rpp32f widthLimit)
+{
+    Rpp32f hOffset = (hRatio - 1) * 0.5f;
+    Rpp32f wOffset = (wRatio - 1) * 0.5f;
+    Rpp32s hKernelSize = std::ceil((hRatio < 1 ? 1 : hRatio)* 2);
+    Rpp32s wKernelSize = std::ceil((wRatio < 1 ? 1 : wRatio)* 2);
+    Rpp32f hKernelSize2 = hKernelSize / 2;
+    Rpp32f wKernelSize2 = wKernelSize / 2;
+    Rpp32f rowWeightParams[hKernelSize], colWeightParams[wKernelSize], srcLocationRow, srcLocationColumn, weightParams[2];
+    Rpp32s rowIndices[hKernelSize], colIndices[wKernelSize], srcLocationRowFloor, srcLocationColumnFloor;
+
+    
+    for(int i = 0; i < dstImgSize.height; i++)
+    {
+        T *dstPtrTempChn[3];
+        dstPtrTempChn[0] = dstPtr[0];
+        dstPtrTempChn[1] = dstPtr[1];
+        dstPtrTempChn[2] = dstPtr[2];
+
+        T *srcRowPtrsForInterp[3][hKernelSize];
+        compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+        compute_index_and_weights(srcLocationRowFloor, weightParams[0], hKernelSize, heightLimit, rowIndices, rowWeightParams);
+
+        for(int k = 0; k < hKernelSize; k++)
+        {
+            srcRowPtrsForInterp[0][k] = srcPtr[0] + rowIndices[k] * srcDescPtr->strides.hStride;
+            srcRowPtrsForInterp[1][k] = srcPtr[1] + rowIndices[k] * srcDescPtr->strides.hStride;
+            srcRowPtrsForInterp[2][k] = srcPtr[2] + rowIndices[k] * srcDescPtr->strides.hStride;
+        }
+
+        int vectorLoopCount = 0;
+        for (; vectorLoopCount < dstImgSize.width; vectorLoopCount++)
+        {
+            Rpp32f tempPixelR, tempPixelG, tempPixelB, tempPixel;
+            tempPixelR = tempPixelG = tempPixelB = 0;
+            compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[0], wOffset, srcDescPtr->strides.wStride);
+            compute_index_and_weights(srcLocationColumnFloor, weightParams[0], wKernelSize, widthLimit, colIndices, colWeightParams, srcDescPtr->strides.wStride);
+            for(int j = 0; j < hKernelSize; j++)
+            {
+                for(int k = 0; k < wKernelSize; k++)
+                {
+                    tempPixelR += (((float)*(srcRowPtrsForInterp[0][j] + colIndices[k]))) * colWeightParams[k] * rowWeightParams[j];
+                    tempPixelG += (((float)*(srcRowPtrsForInterp[1][j] + colIndices[k]))) * colWeightParams[k] * rowWeightParams[j];
+                    tempPixelB += (((float)*(srcRowPtrsForInterp[2][j] + colIndices[k]))) * colWeightParams[k] * rowWeightParams[j];
+                }
+            }
+
+            saturate_pixel(tempPixelR, dstPtrTempChn[0]);
+            saturate_pixel(tempPixelG, dstPtrTempChn[1]);
+            saturate_pixel(tempPixelB, dstPtrTempChn[2]);
+
+            dstPtrTempChn[0] += dstDescPtr->strides.wStride;
+            dstPtrTempChn[1] += dstDescPtr->strides.wStride;
+            dstPtrTempChn[2] += dstDescPtr->strides.wStride;
+
+        }
+        dstPtr[0] += dstDescPtr->strides.hStride;
+        dstPtr[1] += dstDescPtr->strides.hStride;
+        dstPtr[2] += dstDescPtr->strides.hStride;
     }
 }
 
