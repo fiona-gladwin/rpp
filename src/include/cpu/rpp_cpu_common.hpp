@@ -3963,15 +3963,14 @@ inline void compute_dst_size_cap_host(RpptImagePatchPtr dstImgSize, RpptDescPtr 
     dstImgSize->height = std::min(dstImgSize->height, dstDescPtr->h);
 }
 
-inline void compute_resize_src_loc(Rpp32s dstLocation, Rpp32f scale, Rpp32u limit, Rpp32s &srcLoc, Rpp32f *weight, Rpp32f offset = 0, bool hasRGBChannels = false)
+inline void compute_resize_src_loc(Rpp32s dstLocation, Rpp32f scale, Rpp32u limit, Rpp32s &srcLoc, Rpp32f *weight, Rpp32f offset = 0, Rpp32u srcStride = 1)
 {
     Rpp32f srcLocation = ((Rpp32f) dstLocation) * scale + offset;
     Rpp32s srcLocationFloor = (Rpp32s) RPPFLOOR(srcLocation);
     weight[0] = srcLocation - srcLocationFloor;
     weight[1] = 1 - weight[0];
     srcLoc = (srcLocationFloor > limit) ? limit : srcLocationFloor;
-    if(hasRGBChannels)
-        srcLoc = srcLoc * 3;
+    srcLoc = srcLoc * srcStride;
 }
 
 inline void compute_resize_src_loc_sse(__m128 &pDstLoc, __m128 &pScale, __m128 &pLimit, Rpp32s *srcLoc, __m128 *pWeight, __m128 pOffset = xmm_p0, bool hasRGBChannels = false)
