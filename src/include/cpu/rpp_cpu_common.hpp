@@ -3991,7 +3991,7 @@ inline void compute_resize_src_loc(Rpp32s dstLocation, Rpp32f scale, Rpp32u limi
     Rpp32s srcLocationFloor = (Rpp32s) RPPFLOOR(srcLocation);
     weight[0] = srcLocation - srcLocationFloor;
     weight[1] = 1 - weight[0];
-    srcLoc = (srcLocationFloor > limit) ? limit : srcLocationFloor;
+    srcLoc = RPPPRANGECHECKINT(srcLocationFloor, 0, limit);
     if(hasRGBChannels)
         srcLoc = srcLoc * 3;
 }
@@ -4003,7 +4003,7 @@ inline void compute_resize_src_loc_sse(__m128 &pDstLoc, __m128 &pScale, __m128 &
     __m128 pLocFloor = _mm_floor_ps(pLoc);
     pWeight[0] = _mm_sub_ps(pLoc, pLocFloor);
     pWeight[1] = _mm_sub_ps(xmm_p1, pWeight[0]);
-    pLocFloor = _mm_max_ps(_mm_min_ps(_mm_sub_ps(pLocFloor, xmm_p1), pLimit), xmm_p0); // Check
+    pLocFloor = _mm_max_ps(_mm_min_ps(pLocFloor, pLimit), xmm_p0);
     if(hasRGBChannels)
         pLocFloor = _mm_mul_ps(pLocFloor, xmm_pChannel);
     __m128i pxLocFloor = _mm_cvtps_epi32(pLocFloor);
@@ -4087,14 +4087,14 @@ inline void compute_gaussian_coefficients(Rpp32f *weightParams, Rpp32f *gaussian
     float sigma = 0.5f;
     float sigmap2_1 = 1 / (sigma * sigma * -1 * 2);
     float inv_sqrt2pi_sigma = 0.3989422804014327f / sigma;
-    float c1 = inv_sqrt2pi_sigma * expf(weightParams[1] * weightParams[1] * sigmap2_1);
-    float c2 = inv_sqrt2pi_sigma * expf(weightParams[0] * weightParams[0] * sigmap2_1);
-    float c3 = inv_sqrt2pi_sigma * expf(weightParams[3] * weightParams[3] * sigmap2_1);
-    float c4 = inv_sqrt2pi_sigma * expf(weightParams[2] * weightParams[2] * sigmap2_1);
-    gaussianCoeffs[0] = c2 * c4;
-    gaussianCoeffs[1] = c2 * c3;
-    gaussianCoeffs[2] = c1 * c4;
-    gaussianCoeffs[3] = c1 * c3;
+    float c1 = inv_sqrt2pi_sigma * expf(weightParams[0] * weightParams[0] * sigmap2_1); // h
+    float c2 = inv_sqrt2pi_sigma * expf(weightParams[1] * weightParams[1] * sigmap2_1); // 1 - h
+    float c3 = inv_sqrt2pi_sigma * expf(weightParams[2] * weightParams[2] * sigmap2_1); // w
+    float c4 = inv_sqrt2pi_sigma * expf(weightParams[3] * weightParams[3] * sigmap2_1); // 1 - w
+    gaussianCoeffs[0] = c1 * c3;
+    gaussianCoeffs[1] = c1 * c4;
+    gaussianCoeffs[2] = c2 * c3;
+    gaussianCoeffs[3] = c2 * c4;
 }
 
 inline void compute_gaussian_coefficients_sse(__m128 *pWeightParams, __m128 *pGaussianCoeffs)
@@ -4104,14 +4104,14 @@ inline void compute_gaussian_coefficients_sse(__m128 *pWeightParams, __m128 *pGa
     float inv_sqrt2pi_sigma = 0.3989422804014327f / sigma;
     __m128 pSigmap2 = _mm_set1_ps(sigmap2_1);
     __m128 pInvSqrt2PISigma = _mm_set1_ps(inv_sqrt2pi_sigma);
-    __m128 c1 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[1], pWeightParams[1]), pSigmap2)), pInvSqrt2PISigma);    /* (1 - weightedHeight) * (1 - weightedWidth) */
-    __m128 c2 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[0], pWeightParams[0]), pSigmap2)), pInvSqrt2PISigma);    /* (1 - weightedHeight) * weightedWidth */
-    __m128 c3 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[3], pWeightParams[3]), pSigmap2)), pInvSqrt2PISigma);    /* weightedHeight * (1 - weightedWidth) */
-    __m128 c4 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[2], pWeightParams[2]), pSigmap2)), pInvSqrt2PISigma);    /* weightedHeight * weightedWidth */
-    pGaussianCoeffs[0] = _mm_mul_ps(c2, c4);
-    pGaussianCoeffs[1] = _mm_mul_ps(c2, c3);
-    pGaussianCoeffs[2] = _mm_mul_ps(c1, c4);
-    pGaussianCoeffs[3] = _mm_mul_ps(c1, c3);
+    __m128 c1 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[0], pWeightParams[0]), pSigmap2)), pInvSqrt2PISigma);    /* h */
+    __m128 c2 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[1], pWeightParams[1]), pSigmap2)), pInvSqrt2PISigma);    /* 1 - h */
+    __m128 c3 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[2], pWeightParams[2]), pSigmap2)), pInvSqrt2PISigma);    /* w */
+    __m128 c4 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[3], pWeightParams[3]), pSigmap2)), pInvSqrt2PISigma);    /* 1 - w */
+    pGaussianCoeffs[0] = _mm_mul_ps(c1, c3);
+    pGaussianCoeffs[1] = _mm_mul_ps(c1, c4);
+    pGaussianCoeffs[2] = _mm_mul_ps(c2, c3);
+    pGaussianCoeffs[3] = _mm_mul_ps(c2, c4);
 }
 
 template <typename T>

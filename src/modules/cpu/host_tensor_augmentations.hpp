@@ -8598,7 +8598,6 @@ RppStatus resize_gaussian_u8_u8_host_tensor(Rpp8u *srcPtr,
     roiPtrDefault->xywhROI.xy.y = 0;
     roiPtrDefault->xywhROI.roiWidth = srcDescPtr->w;
     roiPtrDefault->xywhROI.roiHeight = srcDescPtr->h;
-    std::cerr << "GAUSSIAN U8\n";
 
 omp_set_dynamic(0);
 #pragma omp parallel for num_threads(dstDescPtr->n)
@@ -8672,8 +8671,8 @@ omp_set_dynamic(0);
 
                 Rpp8u *srcRowPtrsForInterp[2];
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
-                srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
-                srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
+                srcRowPtrsForInterp[0] = srcPtrChannel + srcLocationRowFloor * srcDescPtr->strides.hStride;
+                srcRowPtrsForInterp[1] = srcRowPtrsForInterp[0] + srcDescPtr->strides.hStride;
                 pWeightParams[0] = _mm_set1_ps(weightParams[0]);
                 pWeightParams[1]  = _mm_set1_ps(weightParams[1]);
                 pDstLoc = pDstLocInit;
@@ -8697,7 +8696,6 @@ omp_set_dynamic(0);
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
                     compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], wOffset, true);
-                    srcLocationColumnFloor = RPPPRANGECHECKINT(srcLocationColumnFloor - 3, 0, widthLimitChanneled);
                     compute_gaussian_coefficients(weightParams, gaussianCoeffs);
                     compute_gaussian_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, gaussianCoeffs, dstPtrTempChn[0], dstPtrTempChn[1], dstPtrTempChn[2]);
                     dstPtrTempChn[0]++;
