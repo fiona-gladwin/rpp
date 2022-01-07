@@ -33,6 +33,11 @@ typedef halfhpp Rpp16f;
 #define RPPISGREATER(pixel, value)      ((pixel > value) ? 1 : 0)
 #define RPPISLESSER(pixel, value)       ((pixel < value) ? 1 : 0)
 
+/*Constants used for Gaussian interpolation*/
+// Here sigma is considered as 0.5f
+#define GAUSSCONSTANT1                 -2.0f          // 1 / (sigma * sigma * -1 * 2);
+#define GAUSSCONSTANT2                  0.7978845608028654f // 1 / ((2 * PI)*(1/2) * sigma)
+
 static uint16_t wyhash16_x;
 
 alignas(64) const Rpp32f sch_mat[16] = {0.701f, -0.299f, -0.300f, 0.0f, -0.587f, 0.413f, -0.588f, 0.0f, -0.114f, -0.114f, 0.886f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
@@ -4082,36 +4087,19 @@ inline void compute_bilinear_interpolation_1c(T **srcRowPtrsForInterp, Rpp32s lo
                   ((*(srcRowPtrsForInterp[1] + loc + 1)) * bilinearCoeffs[3]));
 }
 
-inline void compute_gaussian_coefficients(Rpp32f *weightParams, Rpp32f *gaussianCoeffs)
+inline void compute_gaussian_coefficient(Rpp32f weightParam, Rpp32f &gaussianCoeff)
 {
-    float sigma = 0.5f;
-    float sigmap2_1 = 1 / (sigma * sigma * -1 * 2);
-    float inv_sqrt2pi_sigma = 0.3989422804014327f / sigma;
-    float c1 = inv_sqrt2pi_sigma * expf(weightParams[0] * weightParams[0] * sigmap2_1); // h
-    float c2 = inv_sqrt2pi_sigma * expf(weightParams[1] * weightParams[1] * sigmap2_1); // 1 - h
-    float c3 = inv_sqrt2pi_sigma * expf(weightParams[2] * weightParams[2] * sigmap2_1); // w
-    float c4 = inv_sqrt2pi_sigma * expf(weightParams[3] * weightParams[3] * sigmap2_1); // 1 - w
-    gaussianCoeffs[0] = c1 * c3;
-    gaussianCoeffs[1] = c1 * c4;
-    gaussianCoeffs[2] = c2 * c3;
-    gaussianCoeffs[3] = c2 * c4;
+    gaussianCoeff = expf(weightParam * weightParam * GAUSSCONSTANT1) * GAUSSCONSTANT2;
 }
 
-inline void compute_gaussian_coefficients_sse(__m128 *pWeightParams, __m128 *pGaussianCoeffs)
+inline void compute_gaussian_coefficient_sse(Rpp32f weightParam, __m128 &pGaussianCoeff)
 {
-    float sigma = 0.5f;
-    float sigmap2_1 = 1 / (sigma * sigma * -1 * 2);
-    float inv_sqrt2pi_sigma = 0.3989422804014327f / sigma;
-    __m128 pSigmap2 = _mm_set1_ps(sigmap2_1);
-    __m128 pInvSqrt2PISigma = _mm_set1_ps(inv_sqrt2pi_sigma);
-    __m128 c1 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[0], pWeightParams[0]), pSigmap2)), pInvSqrt2PISigma);    /* h */
-    __m128 c2 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[1], pWeightParams[1]), pSigmap2)), pInvSqrt2PISigma);    /* 1 - h */
-    __m128 c3 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[2], pWeightParams[2]), pSigmap2)), pInvSqrt2PISigma);    /* w */
-    __m128 c4 = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParams[3], pWeightParams[3]), pSigmap2)), pInvSqrt2PISigma);    /* 1 - w */
-    pGaussianCoeffs[0] = _mm_mul_ps(c1, c3);
-    pGaussianCoeffs[1] = _mm_mul_ps(c1, c4);
-    pGaussianCoeffs[2] = _mm_mul_ps(c2, c3);
-    pGaussianCoeffs[3] = _mm_mul_ps(c2, c4);
+    __m128 pWeightParam = _mm_set1_ps(weightParam);
+    pGaussianCoeff = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParam, pWeightParam), pGaussConstant1)), pGaussConstant2);    /* h */
+    // pGaussianCoeffs[0] = _mm_mul_ps(c1, c3);
+    // pGaussianCoeffs[1] = _mm_mul_ps(c1, c4);
+    // pGaussianCoeffs[2] = _mm_mul_ps(c2, c3);
+    // pGaussianCoeffs[3] = _mm_mul_ps(c2, c4);
 }
 
 template <typename T>

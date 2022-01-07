@@ -73,6 +73,8 @@ const __m128i xmm_maskp3 = _mm_setr_epi8(8, 0x80, 0x80, 0x80, 9, 0x80, 0x80, 0x8
 const __m128i xmm_maskp4 = _mm_setr_epi8(12, 0x80, 0x80, 0x80, 13, 0x80, 0x80, 0x80, 14, 0x80, 0x80, 0x80, 15, 0x80, 0x80, 0x80);
 const __m128i xmm_store4_pkd_pixels = _mm_setr_epi8(0, 1, 8, 2, 3, 9, 4, 5, 10, 6, 7, 11, 0x80, 0x80, 0x80, 0x80);
 const __m128 xmm_pChannel = _mm_set1_ps(3.0f);
+const __m128 pGaussConstant1 = _mm_set1_ps(-2.0f); // 1 / (sigma * sigma * -1 * 2);
+const __m128 pGaussConstant2 = _mm_set1_ps(0.7978845608028654f); // 1 / ((2 * PI)*(1/2) * sigma)
 
 const __m256 avx_p0 = _mm256_set1_ps(0.0f);
 const __m256 avx_p1 = _mm256_set1_ps(1.0f);

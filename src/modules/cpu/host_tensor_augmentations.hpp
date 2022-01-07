@@ -8650,10 +8650,11 @@ omp_set_dynamic(0);
         __m128 pDstLocInit = _mm_setr_ps(0, 1, 2, 3);
         __m128 pWidthLimit = _mm_set1_ps((float)widthLimit);
         __m128 pWOffset = _mm_set1_ps(wOffset);
-        __m128 pWeightParams[4], pGaussianCoeffs[4], pColFloor, pDstLoc;
+        __m128 pGaussianCoeffs[4], p2x2GaussianCoeffs[4], pDstLoc;
         __m128i pxColFloor;
-        Rpp32s srcLocCF[4] = {0};
-        Rpp32f weightParams[4], gaussianCoeffs[4];
+        Rpp32s srcLocCF[dstImgSize[batchCount].width];
+        Rpp32f weightParams[2], gaussianCoeffs[4], gaussian2x2Coeffs[4];
+        Rpp32f colGaussianCoeffs[2][dstImgSize[batchCount].width];
 
         // Resize with fused output-layout toggle (NHWC -> NCHW)
         if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NCHW))
@@ -8662,6 +8663,12 @@ omp_set_dynamic(0);
             dstPtrRowR = dstPtrChannel;
             dstPtrRowG = dstPtrRowR + dstDescPtr->strides.cStride;
             dstPtrRowB = dstPtrRowG + dstDescPtr->strides.cStride;
+            for(int i = 0; i < dstImgSize[batchCount].width; i++)
+            {
+                compute_resize_src_loc(i, wRatio, widthLimit, srcLocCF[i], &weightParams[0], wOffset, true);
+                compute_gaussian_coefficient(weightParams[1], colGaussianCoeffs[0][i]);
+                compute_gaussian_coefficient(weightParams[0], colGaussianCoeffs[1][i]);
+            }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
                 Rpp8u *dstPtrTempChn[3];
@@ -8673,8 +8680,8 @@ omp_set_dynamic(0);
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
                 srcRowPtrsForInterp[0] = srcPtrChannel + srcLocationRowFloor * srcDescPtr->strides.hStride;
                 srcRowPtrsForInterp[1] = srcRowPtrsForInterp[0] + srcDescPtr->strides.hStride;
-                pWeightParams[0] = _mm_set1_ps(weightParams[0]);
-                pWeightParams[1]  = _mm_set1_ps(weightParams[1]);
+                compute_gaussian_coefficient_sse(weightParams[1], pGaussianCoeffs[0]);
+                compute_gaussian_coefficient_sse(weightParams[0], pGaussianCoeffs[1]);
                 pDstLoc = pDstLocInit;
 
                 int vectorLoopCount = 0;
@@ -8682,11 +8689,11 @@ omp_set_dynamic(0);
                 {
                     __m128 pRow[12], pPixels[3];
 
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], pWOffset, true);
-                    compute_gaussian_coefficients_sse(pWeightParams, pGaussianCoeffs);
-
-                    rpp_simd_load(rpp_bilinear_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
-                    compute_bilinear_interpolation_3c_sse(pRow, pGaussianCoeffs, pPixels);
+                    pGaussianCoeffs[2] = _mm_loadu_ps(colGaussianCoeffs[0] + vectorLoopCount);
+                    pGaussianCoeffs[3] = _mm_loadu_ps(colGaussianCoeffs[1] + vectorLoopCount);
+                    compute_bilinear_coefficients_sse(pGaussianCoeffs, p2x2GaussianCoeffs);
+                    rpp_simd_load(rpp_bilinear_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, (srcLocCF + vectorLoopCount), pRow);
+                    compute_bilinear_interpolation_3c_sse(pRow, p2x2GaussianCoeffs, pPixels);
                     rpp_simd_store(rpp_store12_f32pln3_to_u8pln3, dstPtrTempChn[0], dstPtrTempChn[1], dstPtrTempChn[2], pPixels);
 
                     dstPtrTempChn[0] += 4;
@@ -8695,9 +8702,12 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], wOffset, true);
-                    compute_gaussian_coefficients(weightParams, gaussianCoeffs);
-                    compute_gaussian_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, gaussianCoeffs, dstPtrTempChn[0], dstPtrTempChn[1], dstPtrTempChn[2]);
+                    compute_gaussian_coefficient(weightParams[1], gaussianCoeffs[0]);
+                    compute_gaussian_coefficient(weightParams[0], gaussianCoeffs[1]);
+                    gaussianCoeffs[2] = colGaussianCoeffs[0][vectorLoopCount];
+                    gaussianCoeffs[3] = colGaussianCoeffs[1][vectorLoopCount];
+                    compute_bilinear_coefficients(gaussianCoeffs, gaussian2x2Coeffs);
+                    compute_gaussian_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], gaussian2x2Coeffs, dstPtrTempChn[0], dstPtrTempChn[1], dstPtrTempChn[2]);
                     dstPtrTempChn[0]++;
                     dstPtrTempChn[1]++;
                     dstPtrTempChn[2]++;
