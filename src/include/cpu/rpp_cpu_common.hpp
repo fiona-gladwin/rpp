@@ -94,7 +94,7 @@ inline void saturate_pixel(Rpp32f pixel, Rpp8u* dst)
 
 inline void saturate_pixel(Rpp32f pixel, Rpp8s* dst)
 {
-    *dst = RPPPIXELCHECKI8(pixel - 128);
+    *dst = RPPPIXELCHECKI8(pixel);
 }
 
 inline void saturate_pixel(Rpp32f pixel, Rpp32f* dst)
