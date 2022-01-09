@@ -8657,48 +8657,7 @@ omp_set_dynamic(0);
             dstPtrChannel = dstPtrImage;
             Rpp32f weightParams[4];
 
-
-            // Resize with fused output-layout toggle (NHWC -> NCHW)
-            if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NCHW))
-            {
-                Rpp8u *dstPtrRowChn[3], *srcPtrChn[3];
-                srcPtrChn[0] = srcPtrChannel;
-                srcPtrChn[1] = srcPtrChannel + 1;
-                srcPtrChn[2] = srcPtrChannel + 2;
-                dstPtrRowChn[0] = dstPtrChannel;
-                dstPtrRowChn[1] = dstPtrRowChn[0] + dstDescPtr->strides.cStride;
-                dstPtrRowChn[2] = dstPtrRowChn[1] + dstDescPtr->strides.cStride;
-                resize_generic_host_kernel(srcPtrChn, srcDescPtr, dstPtrRowChn, dstDescPtr, dstImgSize[batchCount], hRatio, wRatio, heightLimit, widthLimit);
-            }
-
-            // Resize with fused output-layout toggle (NCHW -> NHWC)
-            else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NHWC))
-            {
-                Rpp8u *dstPtrRowChn[3], *srcPtrChn[3];
-                srcPtrChn[0] = srcPtrChannel;
-                srcPtrChn[1] = srcPtrChn[0] + srcDescPtr->strides.cStride;
-                srcPtrChn[2] = srcPtrChn[1] + srcDescPtr->strides.cStride;
-                dstPtrRowChn[0] = dstPtrChannel;
-                dstPtrRowChn[1] = dstPtrChannel + 1;
-                dstPtrRowChn[2] = dstPtrChannel + 2;
-                resize_generic_host_kernel(srcPtrChn, srcDescPtr, dstPtrRowChn, dstDescPtr, dstImgSize[batchCount], hRatio, wRatio, heightLimit, widthLimit);
-            }
-
-            // Resize without fused output-layout toggle (NHWC -> NHWC)
-            else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NHWC))
-            {
-                Rpp8u *dstPtrRowChn[3], *srcPtrChn[3];
-                srcPtrChn[0] = srcPtrChannel;
-                srcPtrChn[1] = srcPtrChannel + 1;
-                srcPtrChn[2] = srcPtrChannel + 2;
-                dstPtrRowChn[0] = dstPtrChannel;
-                dstPtrRowChn[1] = dstPtrChannel + 1;
-                dstPtrRowChn[2] = dstPtrChannel + 2;
-                resize_generic_host_kernel(srcPtrChn, srcDescPtr, dstPtrRowChn, dstDescPtr, dstImgSize[batchCount], hRatio, wRatio, heightLimit, widthLimit);
-            }
-
-            // Resize with fused output-layout toggle (NCHW -> NCHW)
-            else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
+            if (srcDescPtr->c == 3)
             {
                 Rpp8u *dstPtrRowChn[3], *srcPtrChn[3];
                 srcPtrChn[0] = srcPtrChannel;
@@ -8708,6 +8667,13 @@ omp_set_dynamic(0);
                 dstPtrRowChn[1] = dstPtrRowChn[0] + dstDescPtr->strides.cStride;
                 dstPtrRowChn[2] = dstPtrRowChn[1] + dstDescPtr->strides.cStride;
                 resize_generic_host_kernel(srcPtrChn, srcDescPtr, dstPtrRowChn, dstDescPtr, dstImgSize[batchCount], hRatio, wRatio, heightLimit, widthLimit);
+            }
+            else if (srcDescPtr->c == 1)
+            {
+                Rpp8u *dstPtrTemp, *srcPtrTemp;
+                srcPtrTemp = srcPtrChannel;
+                dstPtrTemp = dstPtrChannel;
+                resize_generic_host_kernel(srcPtrTemp, srcDescPtr, dstPtrTemp, dstDescPtr, dstImgSize[batchCount], hRatio, wRatio, heightLimit, widthLimit);
             }
         }
     }
