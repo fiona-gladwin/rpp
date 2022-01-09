@@ -1809,4 +1809,29 @@ inline RppStatus rpp_nn_store4_u8pln1(Rpp8u* dstPtr, __m128i &p)
     return RPP_SUCCESS;
 }
 
+inline RppStatus rpp_nn_load_f32pkd3_to_f32pln3(Rpp32f *srcRowPtrsForInterp, Rpp32s *loc, __m128 *p)
+{
+    p[0] = _mm_loadu_ps(srcRowPtrsForInterp + loc[0]);
+    p[1] = _mm_loadu_ps(srcRowPtrsForInterp + loc[1]);
+    p[2] = _mm_loadu_ps(srcRowPtrsForInterp + loc[2]);
+    __m128 pTemp = _mm_loadu_ps(srcRowPtrsForInterp + loc[3]);
+    _MM_TRANSPOSE4_PS(p[0], p[1], p[2], pTemp);
+
+    return RPP_SUCCESS;
+}
+
+inline RppStatus rpp_nn_load_f32pln1(Rpp32f *srcRowPtrsForInterp, Rpp32s *loc, __m128 &p)
+{
+    __m128 pTemp[4];
+    pTemp[0] = _mm_loadu_ps(srcRowPtrsForInterp + loc[0]);
+    pTemp[1] = _mm_loadu_ps(srcRowPtrsForInterp + loc[1]);
+    pTemp[2] = _mm_loadu_ps(srcRowPtrsForInterp + loc[2]);
+    pTemp[3] = _mm_loadu_ps(srcRowPtrsForInterp + loc[3]);
+    pTemp[0] = _mm_unpacklo_ps(pTemp[0], pTemp[2]);    /* unpack 8 lo-pixels of px[0] and px[2] */
+    pTemp[1] = _mm_unpacklo_ps(pTemp[1], pTemp[3]);    /* unpack 8 lo-pixels of px[1] and px[3] */
+    p = _mm_unpacklo_ps(pTemp[0], pTemp[1]);
+
+    return RPP_SUCCESS;
+}
+
 #endif //AMD_RPP_RPP_CPU_SIMD_HPP
