@@ -71,6 +71,8 @@ const __m128i xmm_maskp1 = _mm_setr_epi8(0, 0x80, 0x80, 0x80, 1, 0x80, 0x80, 0x8
 const __m128i xmm_maskp2 = _mm_setr_epi8(4, 0x80, 0x80, 0x80, 5, 0x80, 0x80, 0x80, 6, 0x80, 0x80, 0x80, 7, 0x80, 0x80, 0x80);
 const __m128i xmm_maskp3 = _mm_setr_epi8(8, 0x80, 0x80, 0x80, 9, 0x80, 0x80, 0x80, 10, 0x80, 0x80, 0x80, 11, 0x80, 0x80, 0x80);
 const __m128i xmm_maskp4 = _mm_setr_epi8(12, 0x80, 0x80, 0x80, 13, 0x80, 0x80, 0x80, 14, 0x80, 0x80, 0x80, 15, 0x80, 0x80, 0x80);
+const __m128i xmm_maskpx2 = _mm_setr_epi8(4, 5, 6, 7, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80);
+const __m128i xmm_maskpx3 = _mm_setr_epi8(8, 9, 10, 11, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80);
 const __m128i xmm_store4_pkd_pixels = _mm_setr_epi8(0, 1, 8, 2, 3, 9, 4, 5, 10, 6, 7, 11, 0x80, 0x80, 0x80, 0x80);
 const __m128 xmm_pChannel = _mm_set1_ps(3.0f);
 
@@ -1746,4 +1748,65 @@ inline RppStatus rpp_store4_f32pln1_to_f16pln1(Rpp16f* dstPtr, __m128 p)
 
     return RPP_SUCCESS;
 }
+
+inline RppStatus rpp_nn_load_u8pkd3(Rpp8u *srcRowPtrsForInterp, Rpp32s *loc, __m128i &p)
+{
+    __m128i px[4];
+    px[0] = _mm_loadu_si128((__m128i *)(srcRowPtrsForInterp + loc[0]));  /* Top Row LOC0 load [R01|G01|B01|R02|G02|B02|R03|G03|B03|R04|G04|B04|R05|G05|B05|R06] - Need RGB 01-02 */
+    px[1] = _mm_loadu_si128((__m128i *)(srcRowPtrsForInterp + loc[1]));  /* Top Row LOC1 load [R01|G01|B01|R02|G02|B02|R03|G03|B03|R04|G04|B04|R05|G05|B05|R06] - Need RGB 01-02 */
+    px[2] = _mm_loadu_si128((__m128i *)(srcRowPtrsForInterp + loc[2]));  /* Top Row LOC2 load [R01|G01|B01|R02|G02|B02|R03|G03|B03|R04|G04|B04|R05|G05|B05|R06] - Need RGB 01-02 */
+    px[3] = _mm_loadu_si128((__m128i *)(srcRowPtrsForInterp + loc[3]));  /* Top Row LOC3 load [R01|G01|B01|R02|G02|B02|R03|G03|B03|R04|G04|B04|R05|G05|B05|R06] - Need RGB 01-02 */
+    px[0] = _mm_unpacklo_epi8(px[0], px[2]);    /* unpack 8 lo-pixels of px[0] and px[2] */
+    px[1] = _mm_unpacklo_epi8(px[1], px[3]);    /* unpack 8 lo-pixels of px[1] and px[3] */
+    p = _mm_unpacklo_epi8(px[0], px[1]);    /* unpack to obtain [R01|R01|R01|R01|G01|G01|G01|G01|B01|B01|B01|B01|R02|R02|R02|R02] */
+
+    return RPP_SUCCESS;
+}
+
+inline RppStatus rpp_nn_store4_u8pkd3_to_u8pln3(Rpp8u* dstPtrR, Rpp8u* dstPtrG, Rpp8u* dstPtrB, __m128i &p)
+{
+    _mm_storeu_si128((__m128i *)(dstPtrR), p);
+    _mm_storeu_si128((__m128i *)(dstPtrG), _mm_shuffle_epi8(p, xmm_maskpx2));
+    _mm_storeu_si128((__m128i *)(dstPtrB), _mm_shuffle_epi8(p, xmm_maskpx3));
+
+    return RPP_SUCCESS;
+}
+
+inline RppStatus rpp_nn_store4_u8pkd3(Rpp8u* dstPtr, __m128i &p)
+{
+    __m128i mask = _mm_setr_epi8(0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11, 0x80, 0x80, 0x80, 0x80);
+    _mm_storeu_si128((__m128i *)(dstPtr), _mm_shuffle_epi8(p, mask));
+    return RPP_SUCCESS;
+}
+
+inline RppStatus rpp_nn_load_u8pln1(Rpp8u *srcRowPtrsForInterp, Rpp32s *loc, __m128i &p)
+{
+    __m128i px[4];
+    px[0] = _mm_loadu_si128((__m128i *)(srcRowPtrsForInterp + loc[0]));  /* Top Row LOC0 load [R01|G01|B01|R02|G02|B02|R03|G03|B03|R04|G04|B04|R05|G05|B05|R06] - Need RGB 01-02 */
+    px[1] = _mm_loadu_si128((__m128i *)(srcRowPtrsForInterp + loc[1]));  /* Top Row LOC1 load [R01|G01|B01|R02|G02|B02|R03|G03|B03|R04|G04|B04|R05|G05|B05|R06] - Need RGB 01-02 */
+    px[2] = _mm_loadu_si128((__m128i *)(srcRowPtrsForInterp + loc[2]));  /* Top Row LOC2 load [R01|G01|B01|R02|G02|B02|R03|G03|B03|R04|G04|B04|R05|G05|B05|R06] - Need RGB 01-02 */
+    px[3] = _mm_loadu_si128((__m128i *)(srcRowPtrsForInterp + loc[3]));  /* Top Row LOC3 load [R01|G01|B01|R02|G02|B02|R03|G03|B03|R04|G04|B04|R05|G05|B05|R06] - Need RGB 01-02 */
+    px[0] = _mm_unpacklo_epi8(px[0], px[2]);    /* unpack 8 lo-pixels of px[0] and px[2] */
+    px[1] = _mm_unpacklo_epi8(px[1], px[3]);    /* unpack 8 lo-pixels of px[1] and px[3] */
+    p = _mm_unpacklo_epi8(px[0], px[1]);    /* unpack to obtain [R01|R01|R01|R01|G01|G01|G01|G01|B01|B01|B01|B01|R02|R02|R02|R02] */
+
+    return RPP_SUCCESS;
+}
+
+inline RppStatus rpp_nn_store12_u8pln3_to_u8pkd3(Rpp8u* dstPtr, __m128i *p)
+{
+    __m128i px[4];
+    px[0] = _mm_unpacklo_epi8(p[0], p[1]);
+    px[1] = _mm_unpacklo_epi64(px[0], p[2]);
+    _mm_storeu_si128((__m128i *)(dstPtr), _mm_shuffle_epi8(px[1], xmm_store4_pkd_pixels));
+    return RPP_SUCCESS;
+}
+
+inline RppStatus rpp_nn_store4_u8pln1(Rpp8u* dstPtr, __m128i &p)
+{
+    _mm_storeu_si128((__m128i *)(dstPtr), p);
+
+    return RPP_SUCCESS;
+}
+
 #endif //AMD_RPP_RPP_CPU_SIMD_HPP
