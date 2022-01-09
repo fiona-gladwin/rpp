@@ -4119,4 +4119,32 @@ inline void compute_gaussian_interpolation_3c_pkd(T **srcRowPtrsForInterp, Rpp32
                    ((*(srcRowPtrsForInterp[1] + loc + 2)) * gaussianCoeffs[2]) +
                    ((*(srcRowPtrsForInterp[1] + loc + 5)) * gaussianCoeffs[3]), dstPtrB);
 }
+
+template <typename T>
+inline void compute_gaussian_interpolation_3c_pln(T **srcRowPtrsForInterp, Rpp32s loc, Rpp32f *gaussianCoeffs, T *dstPtrR, T *dstPtrG, T *dstPtrB)
+{
+    Rpp32s channels = 3;
+    saturate_pixel(((*(srcRowPtrsForInterp[0] + loc)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[0] + loc + 3)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[1] + loc)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 3)) * gaussianCoeffs[3]), dstPtrR);
+    saturate_pixel(((*(srcRowPtrsForInterp[2] + loc + 1)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[2] + loc + 4)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[3] + loc + 1)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[3] + loc + 4)) * gaussianCoeffs[3]), dstPtrG);
+    saturate_pixel(((*(srcRowPtrsForInterp[4] + loc + 2)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[4] + loc + 5)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[5] + loc + 2)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[5] + loc + 5)) * gaussianCoeffs[3]), dstPtrB);
+}
+
+template <typename T>
+inline void compute_gaussian_interpolation_1c(T **srcRowPtrsForInterp, Rpp32s loc, Rpp32f *gaussianCoeffs, T *dstPtr)
+{
+    Rpp32s channels = 3;
+    saturate_pixel(((*(srcRowPtrsForInterp[0] + loc)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[0] + loc + 3)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[1] + loc)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 3)) * gaussianCoeffs[3]), dstPtr);
+}
 #endif //RPP_CPU_COMMON_H
