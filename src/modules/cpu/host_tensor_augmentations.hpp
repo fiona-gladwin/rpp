@@ -8666,8 +8666,7 @@ omp_set_dynamic(0);
             for(int i = 0; i < dstImgSize[batchCount].width; i++)
             {
                 compute_resize_src_loc(i, wRatio, widthLimit, srcLocCF[i], &weightParams[0], wOffset, true);
-                compute_gaussian_coefficient(weightParams[1], colGaussianCoeffs[0][i]);
-                compute_gaussian_coefficient(weightParams[0], colGaussianCoeffs[1][i]);
+                compute_2gaussian_coefficients(weightParams, colGaussianCoeffs[0][i], colGaussianCoeffs[1][i]);
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -8680,10 +8679,8 @@ omp_set_dynamic(0);
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
                 srcRowPtrsForInterp[0] = srcPtrChannel + srcLocationRowFloor * srcDescPtr->strides.hStride;
                 srcRowPtrsForInterp[1] = srcRowPtrsForInterp[0] + srcDescPtr->strides.hStride;
-                compute_gaussian_coefficient_sse(weightParams[1], pGaussianCoeffs[0]);
-                compute_gaussian_coefficient_sse(weightParams[0], pGaussianCoeffs[1]);
+                compute_2gaussian_coefficients_sse(weightParams, pGaussianCoeffs[0], pGaussianCoeffs[1]);
                 pDstLoc = pDstLocInit;
-
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += 4)
                 {
@@ -8702,8 +8699,7 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_gaussian_coefficient(weightParams[1], gaussianCoeffs[0]);
-                    compute_gaussian_coefficient(weightParams[0], gaussianCoeffs[1]);
+                    compute_2gaussian_coefficients(weightParams, gaussianCoeffs[0], gaussianCoeffs[1]);
                     gaussianCoeffs[2] = colGaussianCoeffs[0][vectorLoopCount];
                     gaussianCoeffs[3] = colGaussianCoeffs[1][vectorLoopCount];
                     compute_bilinear_coefficients(gaussianCoeffs, gaussian2x2Coeffs);
@@ -8726,8 +8722,7 @@ omp_set_dynamic(0);
             for(int i = 0; i < dstImgSize[batchCount].width; i++)
             {
                 compute_resize_src_loc(i, wRatio, widthLimit, srcLocCF[i], &weightParams[0], wOffset);
-                compute_gaussian_coefficient(weightParams[1], colGaussianCoeffs[0][i]);
-                compute_gaussian_coefficient(weightParams[0], colGaussianCoeffs[1][i]);
+                compute_2gaussian_coefficients(weightParams, colGaussianCoeffs[0][i], colGaussianCoeffs[1][i]);
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -8742,8 +8737,7 @@ omp_set_dynamic(0);
                 srcRowPtrsForInterp[3] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;     // srcPtrBottomRowG for bilinear interpolation
                 srcRowPtrsForInterp[4] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;     // srcPtrTopRowB for bilinear interpolation
                 srcRowPtrsForInterp[5] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;     // srcPtrBottomRowB for bilinear interpolation
-                compute_gaussian_coefficient_sse(weightParams[1], pGaussianCoeffs[0]);
-                compute_gaussian_coefficient_sse(weightParams[0], pGaussianCoeffs[1]);
+                compute_2gaussian_coefficients_sse(weightParams, pGaussianCoeffs[0], pGaussianCoeffs[1]);
                 pDstLoc = pDstLocInit;
 
                 int vectorLoopCount = 0;
@@ -8762,15 +8756,13 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_gaussian_coefficient(weightParams[1], gaussianCoeffs[0]);
-                    compute_gaussian_coefficient(weightParams[0], gaussianCoeffs[1]);
+                    compute_2gaussian_coefficients(weightParams, gaussianCoeffs[0], gaussianCoeffs[1]);
                     gaussianCoeffs[2] = colGaussianCoeffs[0][vectorLoopCount];
                     gaussianCoeffs[3] = colGaussianCoeffs[1][vectorLoopCount];
                     compute_bilinear_coefficients(gaussianCoeffs, gaussian2x2Coeffs);
                     compute_gaussian_interpolation_3c_pln(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], gaussian2x2Coeffs, dstPtrTemp + 0, dstPtrTemp + 1, dstPtrTemp + 2);
                     dstPtrTemp += 3;
                 }
-
                 dstPtrRow += dstDescPtr->strides.hStride;
             }
         }
@@ -8783,8 +8775,7 @@ omp_set_dynamic(0);
             for(int i = 0; i < dstImgSize[batchCount].width; i++)
             {
                 compute_resize_src_loc(i, wRatio, widthLimit, srcLocCF[i], &weightParams[0], wOffset, true);
-                compute_gaussian_coefficient(weightParams[1], colGaussianCoeffs[0][i]);
-                compute_gaussian_coefficient(weightParams[0], colGaussianCoeffs[1][i]);
+                compute_2gaussian_coefficients(weightParams, colGaussianCoeffs[0][i], colGaussianCoeffs[1][i]);
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -8795,8 +8786,7 @@ omp_set_dynamic(0);
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
                 srcRowPtrsForInterp[0] = srcPtrChannel + srcLocationRowFloor * srcDescPtr->strides.hStride;    // srcPtrTopRow for bilinear interpolation
                 srcRowPtrsForInterp[1]  = srcRowPtrsForInterp[0] + srcDescPtr->strides.hStride;                // srcPtrBottomRow for bilinear interpolation
-                compute_gaussian_coefficient_sse(weightParams[1], pGaussianCoeffs[0]);
-                compute_gaussian_coefficient_sse(weightParams[0], pGaussianCoeffs[1]);
+                compute_2gaussian_coefficients_sse(weightParams, pGaussianCoeffs[0], pGaussianCoeffs[1]);
                 pDstLoc = pDstLocInit;
 
                 int vectorLoopCount = 0;
@@ -8815,8 +8805,7 @@ omp_set_dynamic(0);
                 }
                 for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
                 {
-                    compute_gaussian_coefficient(weightParams[1], gaussianCoeffs[0]);
-                    compute_gaussian_coefficient(weightParams[0], gaussianCoeffs[1]);
+                    compute_2gaussian_coefficients(weightParams, gaussianCoeffs[0], gaussianCoeffs[1]);
                     gaussianCoeffs[2] = colGaussianCoeffs[0][vectorLoopCount];
                     gaussianCoeffs[3] = colGaussianCoeffs[1][vectorLoopCount];
                     compute_bilinear_coefficients(gaussianCoeffs, gaussian2x2Coeffs);
@@ -8837,8 +8826,7 @@ omp_set_dynamic(0);
             for(int i = 0; i < dstImgSize[batchCount].width; i++)
             {
                 compute_resize_src_loc(i, wRatio, widthLimit, srcLocCF[i], &weightParams[0], wOffset);
-                compute_gaussian_coefficient(weightParams[1], colGaussianCoeffs[0][i]);
-                compute_gaussian_coefficient(weightParams[0], colGaussianCoeffs[1][i]);
+                compute_2gaussian_coefficients(weightParams, colGaussianCoeffs[0][i], colGaussianCoeffs[1][i]);
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -8853,8 +8841,7 @@ omp_set_dynamic(0);
                 srcRowPtrsForInterp[3] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;    // srcPtrBottomRowG for bilinear interpolation
                 srcRowPtrsForInterp[4] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;    // srcPtrTopRowB for bilinear interpolation
                 srcRowPtrsForInterp[5] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;    // srcPtrBottomRowB for bilinear interpolation
-                compute_gaussian_coefficient_sse(weightParams[1], pGaussianCoeffs[0]);
-                compute_gaussian_coefficient_sse(weightParams[0], pGaussianCoeffs[1]);
+                compute_2gaussian_coefficients_sse(weightParams, pGaussianCoeffs[0], pGaussianCoeffs[1]);
                 pDstLoc = pDstLocInit;
 
                 int vectorLoopCount = 0;
@@ -8881,8 +8868,7 @@ omp_set_dynamic(0);
                 {
                     Rpp8u *dstPtrTempChn;
                     dstPtrTempChn = dstPtrTemp;
-                    compute_gaussian_coefficient(weightParams[1], gaussianCoeffs[0]);
-                    compute_gaussian_coefficient(weightParams[0], gaussianCoeffs[1]);
+                    compute_2gaussian_coefficients(weightParams, gaussianCoeffs[0], gaussianCoeffs[1]);
                     gaussianCoeffs[2] = colGaussianCoeffs[0][vectorLoopCount];
                     gaussianCoeffs[3] = colGaussianCoeffs[1][vectorLoopCount];
                     compute_bilinear_coefficients(gaussianCoeffs, gaussian2x2Coeffs);

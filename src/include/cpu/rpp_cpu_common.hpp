@@ -32,6 +32,9 @@ typedef halfhpp Rpp16f;
 #define RPPPIXELCHECKI8(pixel)          ((pixel < -128) ? -128 : ((pixel < 127) ? pixel : 127))
 #define RPPISGREATER(pixel, value)      ((pixel > value) ? 1 : 0)
 #define RPPISLESSER(pixel, value)       ((pixel < value) ? 1 : 0)
+// #define CHANNEL_R                       0
+// #define CHANNEL_G                       1
+// #define CHANNEL_B                       2
 
 /*Constants used for Gaussian interpolation*/
 // Here sigma is considered as 0.5f
@@ -4095,7 +4098,7 @@ inline void compute_gaussian_coefficient(Rpp32f weightParam, Rpp32f &gaussianCoe
 inline void compute_gaussian_coefficient_sse(Rpp32f weightParam, __m128 &pGaussianCoeff)
 {
     __m128 pWeightParam = _mm_set1_ps(weightParam);
-    pGaussianCoeff = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParam, pWeightParam), pGaussConstant1)), pGaussConstant2);    /* h */
+    pGaussianCoeff = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParam, pWeightParam), pGaussConstant1)), pGaussConstant2);
     // pGaussianCoeffs[0] = _mm_mul_ps(c1, c3);
     // pGaussianCoeffs[1] = _mm_mul_ps(c1, c4);
     // pGaussianCoeffs[2] = _mm_mul_ps(c2, c3);
@@ -4147,4 +4150,31 @@ inline void compute_gaussian_interpolation_1c(T **srcRowPtrsForInterp, Rpp32s lo
                    ((*(srcRowPtrsForInterp[1] + loc)) * gaussianCoeffs[2]) +
                    ((*(srcRowPtrsForInterp[1] + loc + 3)) * gaussianCoeffs[3]), dstPtr);
 }
+
+inline void compute_2gaussian_coefficients(Rpp32f *weights, Rpp32f &coeff1, Rpp32f &coeff2)
+{
+    compute_gaussian_coefficient(weights[1], coeff1);
+    compute_gaussian_coefficient(weights[0], coeff2);
+    Rpp32f sum = coeff1 + coeff2;
+    if(sum)
+    {
+        sum = 1 / sum;
+        coeff1 = coeff1 * sum;
+        coeff2 = coeff2 * sum;
+    }
+}
+
+inline void compute_2gaussian_coefficients_sse(Rpp32f* weights, __m128 &pCoeff1, __m128 &pCoeff2)
+{
+    compute_gaussian_coefficient_sse(weights[1], pCoeff1);
+    compute_gaussian_coefficient_sse(weights[0], pCoeff2);
+    __m128 pSum = _mm_add_ps(pCoeff1, pCoeff2);
+    if(_mm_extract_ps(pSum, 0))
+    {
+        pSum = _mm_div_ps(xmm_p1, pSum);
+        pCoeff1 = _mm_mul_ps(pCoeff1, pSum);
+        pCoeff2 = _mm_mul_ps(pCoeff2, pSum);
+    }
+}
+
 #endif //RPP_CPU_COMMON_H
