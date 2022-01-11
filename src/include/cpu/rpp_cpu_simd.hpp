@@ -411,11 +411,12 @@ inline RppStatus rpp_load12_f32pln3_to_f32pln3(Rpp32f *srcPtrR, Rpp32f *srcPtrG,
 
 inline RppStatus rpp_store12_f32pln3_to_f32pkd3(Rpp32f *dstPtr, __m128 *p)
 {
-    _MM_TRANSPOSE4_PS(p[0], p[1], p[2], p[3]);
+    __m128 pTemp = xmm_p0;
+    _MM_TRANSPOSE4_PS(p[0], p[1], p[2], pTemp);
     _mm_storeu_ps(dstPtr, p[0]);
     _mm_storeu_ps(&dstPtr[3], p[1]);
     _mm_storeu_ps(&dstPtr[6], p[2]);
-    _mm_storeu_ps(&dstPtr[9], p[3]);
+    _mm_storeu_ps(&dstPtr[9], pTemp);
 
     return RPP_SUCCESS;
 }
