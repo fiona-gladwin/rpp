@@ -96,6 +96,10 @@ int main(int argc, char **argv)
     int interpolation_type = (test_case == 21) ? atoi(argv[7]) : 1;
     RpptInterpolationType interpolationType = RpptInterpolationType::BILINEAR;
     std::string interpolationTypeName;
+    if(test_case == 21)
+    {
+        interpolationTypeName = get_interpolation_type(interpolation_type, interpolationType);
+    }
 
     if (verbosity)
     {
@@ -106,11 +110,7 @@ int main(int argc, char **argv)
         printf("\nu8 / f16 / f32 / u8->f16 / u8->f32 / i8 / u8->i8 (0/1/2/3/4/5/6) = %s", argv[4]);
         printf("\noutputFormatToggle (pkd->pkd = 0 / pkd->pln = 1) = %s", argv[5]);
         printf("\ncase number (0:81) = %s", argv[6]);
-        if(test_case == 21)
-        {
-            interpolationTypeName = get_interpolation_type(interpolation_type, interpolationType);
-            printf("\ninterpolation type (0:2) = %s", interpolationTypeName.c_str());
-        }
+        printf("\ninterpolation type (0:2) = %s", interpolationTypeName.c_str());
     }
 
     int ip_channel = 1;

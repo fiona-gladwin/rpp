@@ -202,7 +202,7 @@ do
 
             if [ "$case" -eq 21 ]
             then
-                for ((interp_type=0;interp_type<4;interp_type++))
+                for ((interp_type=0;interp_type<6;interp_type++))
                 do
                     printf "\n./Tensor_host_pkd3 $SRC_FOLDER_1_TEMP $SRC_FOLDER_2_TEMP $DST_FOLDER_TEMP $bitDepth $outputFormatToggle $case $interp_type 0"
                     ./Tensor_host_pkd3 "$SRC_FOLDER_1_TEMP" "$SRC_FOLDER_2_TEMP" "$DST_FOLDER_TEMP" "$bitDepth" "$outputFormatToggle" "$case" "$interp_type" "0"
@@ -271,7 +271,7 @@ do
 
             if [ "$case" -eq 21 ]
             then
-                for ((interp_type=0;interp_type<4;interp_type++))
+                for ((interp_type=0;interp_type<6;interp_type++))
                 do
                     printf "\n./Tensor_host_pln1 $SRC_FOLDER_1_TEMP $SRC_FOLDER_2_TEMP $DST_FOLDER_TEMP $bitDepth $outputFormatToggle $case $interp_type 0"
                     ./Tensor_host_pln1 "$SRC_FOLDER_1_TEMP" "$SRC_FOLDER_2_TEMP" "$DST_FOLDER_TEMP" "$bitDepth" "$outputFormatToggle" "$case" "$interp_type" "0"
@@ -340,7 +340,7 @@ do
 
             if [ "$case" -eq 21 ]
             then
-                for ((interp_type=0;interp_type<4;interp_type++))
+                for ((interp_type=0;interp_type<6;interp_type++))
                 do
                     printf "\n./Tensor_host_pln3 $SRC_FOLDER_1_TEMP $SRC_FOLDER_2_TEMP $DST_FOLDER_TEMP $bitDepth $outputFormatToggle $case $interp_type 0"
                     ./Tensor_host_pln3 "$SRC_FOLDER_1_TEMP" "$SRC_FOLDER_2_TEMP" "$DST_FOLDER_TEMP" "$bitDepth" "$outputFormatToggle" "$case" "$interp_type" "0"
