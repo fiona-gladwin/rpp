@@ -8651,22 +8651,21 @@ omp_set_dynamic(0);
         Rpp32s widthLimitChanneled = widthLimit * 3;
         Rpp32s srcLocCF[dstImgSize[batchCount].width];
         Rpp32f weightParams[4];
+        Rpp32s kernelSize = 6; // Lanczos interpolation uses filters size = 6 x 6
 
         // Resize with fused output-layout toggle (NHWC -> NCHW)
         if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NCHW))
         {
-            Rpp8u *srcRowPtrsForInterp[6];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width + 3], lanczosCoeffsY[8];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width + 3];
             Rpp8u *dstPtrRowR, *dstPtrRowG, *dstPtrRowB;
             dstPtrRowR = dstPtrChannel;
             dstPtrRowG = dstPtrRowR + dstDescPtr->strides.cStride;
             dstPtrRowB = dstPtrRowG + dstDescPtr->strides.cStride;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset, true);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);    // Load the src pixels (2 * srcDescPtr->strides.wStride = 6) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -8675,16 +8674,18 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRowG;
                 dstPtrTempChn[2] = dstPtrRowB;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp8u *srcRowPtrsForInterp[6]; // Since kernelSize = 6
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[3] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -8693,12 +8694,14 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
 
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c);
 #endif
@@ -8715,16 +8718,14 @@ omp_set_dynamic(0);
         // Resize with fused output-layout toggle (NCHW -> NHWC)
         else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NHWC))
         {
-            Rpp8u *srcRowPtrsForInterp[18];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width], lanczosCoeffsY[6];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width];
             Rpp8u *dstPtrRow;
             dstPtrRow = dstPtrChannel;
             for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit); // Load the src pixels (2 * srcDescPtr->strides.wStride = 2) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -8733,6 +8734,7 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRow + 1;
                 dstPtrTempChn[2] = dstPtrRow + 2;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp8u *srcRowPtrsForInterp[18];
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
@@ -8753,10 +8755,11 @@ omp_set_dynamic(0);
                 srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
                 srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
                 srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[6];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -8764,14 +8767,16 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_u8pln1_to_f32pln1, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
                     rpp_simd_load(rpp_lanczos3_load_u8pln1_to_f32pln1, srcRowPtrsForInterp + 6, srcLocCF[vectorLoopCount], pRow + 6);
                     rpp_simd_load(rpp_lanczos3_load_u8pln1_to_f32pln1, srcRowPtrsForInterp + 12, srcLocCF[vectorLoopCount], pRow + 12);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c, true);
 #endif
@@ -8786,16 +8791,14 @@ omp_set_dynamic(0);
         // Resize with fused output-layout toggle (NHWC -> NCHW)
         else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NHWC))
         {
-            Rpp8u *srcRowPtrsForInterp[6];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width + 3], lanczosCoeffsY[8];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width + 3];
             Rpp8u *dstPtrRow;
             dstPtrRow = dstPtrChannel;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset, true);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);    // Load the src pixels (2 * srcDescPtr->strides.wStride = 6) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -8804,16 +8807,17 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRow + 1;
                 dstPtrTempChn[2] = dstPtrRow + 2;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp8u *srcRowPtrsForInterp[6];  // kernelSize = 6
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[3] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
-                int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -8821,12 +8825,14 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int vectorLoopCount = 0, count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c);
 #endif
@@ -8841,22 +8847,21 @@ omp_set_dynamic(0);
         // Resize with fused output-layout toggle (NCHW -> NCHW)
         else if ((srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
         {
-            Rpp8u *srcRowPtrsForInterp[18];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width], lanczosCoeffsY[6];
-            __m256 pRow[6];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width];
             Rpp8u *dstPtrRow;
             dstPtrRow = dstPtrChannel;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit); // Load the src pixels (2 * srcDescPtr->strides.wStride = 2) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
                 Rpp8u *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp8u *srcRowPtrsForInterp[18];
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
@@ -8864,24 +8869,27 @@ omp_set_dynamic(0);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
 
-                // TODO - Should we add if cond here for single channel check
-                srcRowPtrsForInterp[6] = srcRowPtrsForInterp[0] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[7] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[8] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[9] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[10] = srcRowPtrsForInterp[4] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[11] = srcRowPtrsForInterp[5] + srcDescPtr->strides.cStride;
+                if(srcDescPtr->c == 3)
+                {
+                    srcRowPtrsForInterp[6] = srcRowPtrsForInterp[0] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[7] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[8] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[9] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[10] = srcRowPtrsForInterp[4] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[11] = srcRowPtrsForInterp[5] + srcDescPtr->strides.cStride;
 
-                srcRowPtrsForInterp[12] = srcRowPtrsForInterp[6] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[13] = srcRowPtrsForInterp[7] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[14] = srcRowPtrsForInterp[8] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[12] = srcRowPtrsForInterp[6] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[13] = srcRowPtrsForInterp[7] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[14] = srcRowPtrsForInterp[8] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                }
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -8889,20 +8897,23 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
                     Rpp8u *dstPtrTempChn;
                     dstPtrTempChn = dstPtrTemp;
 #if __AVX2__
+                    __m256 pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
 #endif
                     for(int c = 0; c < dstDescPtr->c; c++)
                     {
 #if __AVX2__
-                        rpp_simd_load(rpp_lanczos3_load_u8pln1_to_f32pln1, srcRowPtrsForInterp + (c * 6), srcLocCF[vectorLoopCount], pRow);
-                        compute_lanczos3_interpolation_1c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                        __m256 pRow[6];
+                        rpp_simd_load(rpp_lanczos3_load_u8pln1_to_f32pln1, srcRowPtrsForInterp + (c * kernelSize), srcLocCF[vectorLoopCount], pRow);
+                        compute_lanczos3_interpolation_1c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
-                        compute_lanczos3_interpolation(srcRowPtrsForInterp + (c * 6), srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, &dstPtrTempChn, 1);
+                        compute_lanczos3_interpolation(srcRowPtrsForInterp + (c * kernelSize), srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, &dstPtrTempChn, 1);
 #endif
                         dstPtrTempChn += dstDescPtr->strides.cStride;
                     }
@@ -8980,22 +8991,21 @@ omp_set_dynamic(0);
         Rpp32s widthLimitChanneled = widthLimit * 3;
         Rpp32s srcLocCF[dstImgSize[batchCount].width];
         Rpp32f weightParams[4];
+        Rpp32s kernelSize = 6; // Lanczos interpolation uses filters size = 6 x 6
 
         // Resize with fused output-layout toggle (NHWC -> NCHW)
         if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NCHW))
         {
-            Rpp32f *srcRowPtrsForInterp[6];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width + 3], lanczosCoeffsY[8];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width + 3];
             Rpp32f *dstPtrRowR, *dstPtrRowG, *dstPtrRowB;
             dstPtrRowR = dstPtrChannel;
             dstPtrRowG = dstPtrRowR + dstDescPtr->strides.cStride;
             dstPtrRowB = dstPtrRowG + dstDescPtr->strides.cStride;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset, true);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);    // Load the src pixels (2 * srcDescPtr->strides.wStride = 6) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -9004,16 +9014,18 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRowG;
                 dstPtrTempChn[2] = dstPtrRowB;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp32f *srcRowPtrsForInterp[6]; // Since kernelSize = 6
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[3] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9022,12 +9034,14 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
 
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_f32pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c);
 #endif
@@ -9044,16 +9058,14 @@ omp_set_dynamic(0);
         // Resize with fused output-layout toggle (NCHW -> NHWC)
         else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NHWC))
         {
-            Rpp32f *srcRowPtrsForInterp[18];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width], lanczosCoeffsY[6];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width];
             Rpp32f *dstPtrRow;
             dstPtrRow = dstPtrChannel;
             for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit); // Load the src pixels (2 * srcDescPtr->strides.wStride = 2) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -9062,6 +9074,7 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRow + 1;
                 dstPtrTempChn[2] = dstPtrRow + 2;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp32f *srcRowPtrsForInterp[18];
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
@@ -9082,10 +9095,11 @@ omp_set_dynamic(0);
                 srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
                 srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
                 srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[6];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9093,14 +9107,16 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_f32pln1_to_f32pln1, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
                     rpp_simd_load(rpp_lanczos3_load_f32pln1_to_f32pln1, srcRowPtrsForInterp + 6, srcLocCF[vectorLoopCount], pRow + 6);
                     rpp_simd_load(rpp_lanczos3_load_f32pln1_to_f32pln1, srcRowPtrsForInterp + 12, srcLocCF[vectorLoopCount], pRow + 12);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c, true);
 #endif
@@ -9112,19 +9128,17 @@ omp_set_dynamic(0);
             }
         }
 
-        // Resize with fused output-layout toggle (NHWC -> NHWC)
+        // Resize with fused output-layout toggle (NHWC -> NCHW)
         else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NHWC))
         {
-            Rpp32f *srcRowPtrsForInterp[6];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width + 3], lanczosCoeffsY[8];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width + 3];
             Rpp32f *dstPtrRow;
             dstPtrRow = dstPtrChannel;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset, true);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);    // Load the src pixels (2 * srcDescPtr->strides.wStride = 6) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -9133,16 +9147,17 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRow + 1;
                 dstPtrTempChn[2] = dstPtrRow + 2;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp32f *srcRowPtrsForInterp[6];  // kernelSize = 6
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[3] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
-                int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9150,12 +9165,14 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int vectorLoopCount = 0, count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_f32pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c);
 #endif
@@ -9170,22 +9187,21 @@ omp_set_dynamic(0);
         // Resize with fused output-layout toggle (NCHW -> NCHW)
         else if ((srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
         {
-            Rpp32f *srcRowPtrsForInterp[18];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width], lanczosCoeffsY[6];
-            __m256 pRow[6];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width];
             Rpp32f *dstPtrRow;
             dstPtrRow = dstPtrChannel;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit); // Load the src pixels (2 * srcDescPtr->strides.wStride = 2) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
                 Rpp32f *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp32f *srcRowPtrsForInterp[18];
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
@@ -9193,24 +9209,27 @@ omp_set_dynamic(0);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
 
-                // TODO - Should we add if cond here for single channel check
-                srcRowPtrsForInterp[6] = srcRowPtrsForInterp[0] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[7] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[8] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[9] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[10] = srcRowPtrsForInterp[4] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[11] = srcRowPtrsForInterp[5] + srcDescPtr->strides.cStride;
+                if(srcDescPtr->c == 3)
+                {
+                    srcRowPtrsForInterp[6] = srcRowPtrsForInterp[0] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[7] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[8] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[9] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[10] = srcRowPtrsForInterp[4] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[11] = srcRowPtrsForInterp[5] + srcDescPtr->strides.cStride;
 
-                srcRowPtrsForInterp[12] = srcRowPtrsForInterp[6] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[13] = srcRowPtrsForInterp[7] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[14] = srcRowPtrsForInterp[8] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[12] = srcRowPtrsForInterp[6] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[13] = srcRowPtrsForInterp[7] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[14] = srcRowPtrsForInterp[8] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                }
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9218,20 +9237,23 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
                     Rpp32f *dstPtrTempChn;
                     dstPtrTempChn = dstPtrTemp;
 #if __AVX2__
+                    __m256 pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
 #endif
                     for(int c = 0; c < dstDescPtr->c; c++)
                     {
 #if __AVX2__
-                        rpp_simd_load(rpp_lanczos3_load_f32pln1_to_f32pln1, srcRowPtrsForInterp + (c * 6), srcLocCF[vectorLoopCount], pRow);
-                        compute_lanczos3_interpolation_1c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                        __m256 pRow[6];
+                        rpp_simd_load(rpp_lanczos3_load_f32pln1_to_f32pln1, srcRowPtrsForInterp + (c * kernelSize), srcLocCF[vectorLoopCount], pRow);
+                        compute_lanczos3_interpolation_1c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
-                        compute_lanczos3_interpolation(srcRowPtrsForInterp + (c * 6), srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, &dstPtrTempChn, 1);
+                        compute_lanczos3_interpolation(srcRowPtrsForInterp + (c * kernelSize), srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, &dstPtrTempChn, 1);
 #endif
                         dstPtrTempChn += dstDescPtr->strides.cStride;
                     }
@@ -9245,13 +9267,13 @@ omp_set_dynamic(0);
 }
 
 RppStatus resize_lanczos_f16_f16_host_tensor(Rpp16f *srcPtr,
-                                            RpptDescPtr srcDescPtr,
-                                            Rpp16f *dstPtr,
-                                            RpptDescPtr dstDescPtr,
-                                            RpptImagePatchPtr dstImgSize,
-                                            RpptROIPtr roiTensorPtrSrc,
-                                            RpptRoiType roiType,
-                                            RppLayoutParams srcLayoutParams)
+                                             RpptDescPtr srcDescPtr,
+                                             Rpp16f *dstPtr,
+                                             RpptDescPtr dstDescPtr,
+                                             RpptImagePatchPtr dstImgSize,
+                                             RpptROIPtr roiTensorPtrSrc,
+                                             RpptRoiType roiType,
+                                             RppLayoutParams srcLayoutParams)
 {
     RpptROI roiDefault;
     RpptROIPtr roiPtrDefault;
@@ -9309,22 +9331,21 @@ omp_set_dynamic(0);
         Rpp32s widthLimitChanneled = widthLimit * 3;
         Rpp32s srcLocCF[dstImgSize[batchCount].width];
         Rpp32f weightParams[4];
+        Rpp32s kernelSize = 6; // Lanczos interpolation uses filters size = 6 x 6
 
         // Resize with fused output-layout toggle (NHWC -> NCHW)
         if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NCHW))
         {
-            Rpp16f *srcRowPtrsForInterp[6];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width + 3], lanczosCoeffsY[8];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width + 3];
             Rpp16f *dstPtrRowR, *dstPtrRowG, *dstPtrRowB;
             dstPtrRowR = dstPtrChannel;
             dstPtrRowG = dstPtrRowR + dstDescPtr->strides.cStride;
             dstPtrRowB = dstPtrRowG + dstDescPtr->strides.cStride;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset, true);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);    // Load the src pixels (2 * srcDescPtr->strides.wStride = 6) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -9333,16 +9354,18 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRowG;
                 dstPtrTempChn[2] = dstPtrRowB;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp16f *srcRowPtrsForInterp[6]; // Since kernelSize = 6
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[3] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9351,12 +9374,14 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
 
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_f16pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c);
 #endif
@@ -9373,16 +9398,14 @@ omp_set_dynamic(0);
         // Resize with fused output-layout toggle (NCHW -> NHWC)
         else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NHWC))
         {
-            Rpp16f *srcRowPtrsForInterp[18];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width], lanczosCoeffsY[6];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width];
             Rpp16f *dstPtrRow;
             dstPtrRow = dstPtrChannel;
             for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit); // Load the src pixels (2 * srcDescPtr->strides.wStride = 2) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -9391,6 +9414,7 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRow + 1;
                 dstPtrTempChn[2] = dstPtrRow + 2;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp16f *srcRowPtrsForInterp[18];
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
@@ -9411,10 +9435,11 @@ omp_set_dynamic(0);
                 srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
                 srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
                 srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[6];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9422,14 +9447,16 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_f16pln1_to_f32pln1, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
                     rpp_simd_load(rpp_lanczos3_load_f16pln1_to_f32pln1, srcRowPtrsForInterp + 6, srcLocCF[vectorLoopCount], pRow + 6);
                     rpp_simd_load(rpp_lanczos3_load_f16pln1_to_f32pln1, srcRowPtrsForInterp + 12, srcLocCF[vectorLoopCount], pRow + 12);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c, true);
 #endif
@@ -9444,16 +9471,14 @@ omp_set_dynamic(0);
         // Resize with fused output-layout toggle (NHWC -> NCHW)
         else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NHWC))
         {
-            Rpp16f *srcRowPtrsForInterp[6];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width + 3], lanczosCoeffsY[8];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width + 3];
             Rpp16f *dstPtrRow;
             dstPtrRow = dstPtrChannel;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset, true);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);    // Load the src pixels (2 * srcDescPtr->strides.wStride = 6) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -9462,16 +9487,17 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRow + 1;
                 dstPtrTempChn[2] = dstPtrRow + 2;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp16f *srcRowPtrsForInterp[6];  // kernelSize = 6
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[3] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
-                int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9479,12 +9505,14 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int vectorLoopCount = 0, count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_f16pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c);
 #endif
@@ -9499,22 +9527,21 @@ omp_set_dynamic(0);
         // Resize with fused output-layout toggle (NCHW -> NCHW)
         else if ((srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
         {
-            Rpp16f *srcRowPtrsForInterp[18];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width], lanczosCoeffsY[6];
-            __m256 pRow[6];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width];
             Rpp16f *dstPtrRow;
             dstPtrRow = dstPtrChannel;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit); // Load the src pixels (2 * srcDescPtr->strides.wStride = 2) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
                 Rpp16f *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp16f *srcRowPtrsForInterp[18];
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
@@ -9522,24 +9549,27 @@ omp_set_dynamic(0);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
 
-                // TODO - Should we add if cond here for single channel check
-                srcRowPtrsForInterp[6] = srcRowPtrsForInterp[0] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[7] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[8] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[9] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[10] = srcRowPtrsForInterp[4] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[11] = srcRowPtrsForInterp[5] + srcDescPtr->strides.cStride;
+                if(srcDescPtr->c == 3)
+                {
+                    srcRowPtrsForInterp[6] = srcRowPtrsForInterp[0] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[7] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[8] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[9] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[10] = srcRowPtrsForInterp[4] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[11] = srcRowPtrsForInterp[5] + srcDescPtr->strides.cStride;
 
-                srcRowPtrsForInterp[12] = srcRowPtrsForInterp[6] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[13] = srcRowPtrsForInterp[7] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[14] = srcRowPtrsForInterp[8] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[12] = srcRowPtrsForInterp[6] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[13] = srcRowPtrsForInterp[7] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[14] = srcRowPtrsForInterp[8] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                }
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9547,20 +9577,23 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
                     Rpp16f *dstPtrTempChn;
                     dstPtrTempChn = dstPtrTemp;
 #if __AVX2__
+                    __m256 pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
 #endif
                     for(int c = 0; c < dstDescPtr->c; c++)
                     {
 #if __AVX2__
-                        rpp_simd_load(rpp_lanczos3_load_f16pln1_to_f32pln1, srcRowPtrsForInterp + (c * 6), srcLocCF[vectorLoopCount], pRow);
-                        compute_lanczos3_interpolation_1c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                        __m256 pRow[6];
+                        rpp_simd_load(rpp_lanczos3_load_f16pln1_to_f32pln1, srcRowPtrsForInterp + (c * kernelSize), srcLocCF[vectorLoopCount], pRow);
+                        compute_lanczos3_interpolation_1c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
-                        compute_lanczos3_interpolation(srcRowPtrsForInterp + (c * 6), srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, &dstPtrTempChn, 1);
+                        compute_lanczos3_interpolation(srcRowPtrsForInterp + (c * kernelSize), srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, &dstPtrTempChn, 1);
 #endif
                         dstPtrTempChn += dstDescPtr->strides.cStride;
                     }
@@ -9638,22 +9671,21 @@ omp_set_dynamic(0);
         Rpp32s widthLimitChanneled = widthLimit * 3;
         Rpp32s srcLocCF[dstImgSize[batchCount].width];
         Rpp32f weightParams[4];
+        Rpp32s kernelSize = 6; // Lanczos interpolation uses filters size = 6 x 6
 
         // Resize with fused output-layout toggle (NHWC -> NCHW)
         if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NCHW))
         {
-            Rpp8s *srcRowPtrsForInterp[6];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width + 3], lanczosCoeffsY[8];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width + 3];
             Rpp8s *dstPtrRowR, *dstPtrRowG, *dstPtrRowB;
             dstPtrRowR = dstPtrChannel;
             dstPtrRowG = dstPtrRowR + dstDescPtr->strides.cStride;
             dstPtrRowB = dstPtrRowG + dstDescPtr->strides.cStride;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset, true);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);    // Load the src pixels (2 * srcDescPtr->strides.wStride = 6) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -9662,16 +9694,18 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRowG;
                 dstPtrTempChn[2] = dstPtrRowB;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp8s *srcRowPtrsForInterp[6]; // Since kernelSize = 6
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[3] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9680,12 +9714,14 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
 
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_i8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c);
 #endif
@@ -9702,16 +9738,14 @@ omp_set_dynamic(0);
         // Resize with fused output-layout toggle (NCHW -> NHWC)
         else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NHWC))
         {
-            Rpp8s *srcRowPtrsForInterp[18];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width], lanczosCoeffsY[6];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width];
             Rpp8s *dstPtrRow;
             dstPtrRow = dstPtrChannel;
             for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit); // Load the src pixels (2 * srcDescPtr->strides.wStride = 2) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -9720,6 +9754,7 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRow + 1;
                 dstPtrTempChn[2] = dstPtrRow + 2;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp8s *srcRowPtrsForInterp[18];
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
@@ -9740,10 +9775,11 @@ omp_set_dynamic(0);
                 srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
                 srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
                 srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[6];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9751,14 +9787,16 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_i8pln1_to_f32pln1, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
                     rpp_simd_load(rpp_lanczos3_load_i8pln1_to_f32pln1, srcRowPtrsForInterp + 6, srcLocCF[vectorLoopCount], pRow + 6);
                     rpp_simd_load(rpp_lanczos3_load_i8pln1_to_f32pln1, srcRowPtrsForInterp + 12, srcLocCF[vectorLoopCount], pRow + 12);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c, true);
 #endif
@@ -9773,16 +9811,14 @@ omp_set_dynamic(0);
         // Resize with fused output-layout toggle (NHWC -> NCHW)
         else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NHWC))
         {
-            Rpp8s *srcRowPtrsForInterp[6];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width + 3], lanczosCoeffsY[8];
-            __m256 pRow[18];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width + 3];
             Rpp8s *dstPtrRow;
             dstPtrRow = dstPtrChannel;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset, true);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 6, 0, widthLimitChanneled);    // Load the src pixels (2 * srcDescPtr->strides.wStride = 6) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
@@ -9791,16 +9827,17 @@ omp_set_dynamic(0);
                 dstPtrTempChn[1] = dstPtrRow + 1;
                 dstPtrTempChn[2] = dstPtrRow + 2;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp8s *srcRowPtrsForInterp[6];  // kernelSize = 6
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[3] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
-                int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9808,12 +9845,14 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int vectorLoopCount = 0, count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
 #if __AVX2__
+                    __m256 pRow[18], pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
                     rpp_simd_load(rpp_lanczos3_load_i8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF[vectorLoopCount], pRow);
-                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                    compute_lanczos3_interpolation_3c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
                     compute_lanczos3_interpolation(srcRowPtrsForInterp, srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, dstPtrTempChn, srcDescPtr->c);
 #endif
@@ -9828,22 +9867,21 @@ omp_set_dynamic(0);
         // Resize with fused output-layout toggle (NCHW -> NCHW)
         else if ((srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
         {
-            Rpp8s *srcRowPtrsForInterp[18];
-            Rpp32f lanczosCoeffsX[6 * dstImgSize[batchCount].width], lanczosCoeffsY[6];
-            __m256 pRow[6];
+            Rpp32f lanczosCoeffsX[kernelSize * dstImgSize[batchCount].width];
             Rpp8s *dstPtrRow;
             dstPtrRow = dstPtrChannel;
-            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += 6)
+            for (int j = 0, count = 0; j < dstImgSize[batchCount].width; j++, count += kernelSize)
             {
                 compute_resize_src_loc(j, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[1], wOffset);
                 compute_lanczos3_coefficients(lanczosCoeffsX + count, weightParams[1]);
-                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit);
+                srcLocCF[j] = RPPPRANGECHECKINT(srcLocationColumnFloor - 2, 0, widthLimit); // Load the src pixels (2 * srcDescPtr->strides.wStride = 2) locations ahead
             }
             for(int i = 0; i < dstImgSize[batchCount].height; i++)
             {
                 Rpp8s *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
+                Rpp8s *srcRowPtrsForInterp[18];
                 srcRowPtrsForInterp[0] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[1] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor - 1, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[2] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor, 0, heightLimit) * srcDescPtr->strides.hStride);
@@ -9851,24 +9889,27 @@ omp_set_dynamic(0);
                 srcRowPtrsForInterp[4] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 2, 0, heightLimit) * srcDescPtr->strides.hStride);
                 srcRowPtrsForInterp[5] = srcPtrChannel + (RPPPRANGECHECKINT(srcLocationRowFloor + 3, 0, heightLimit) * srcDescPtr->strides.hStride);
 
-                // TODO - Should we add if cond here for single channel check
-                srcRowPtrsForInterp[6] = srcRowPtrsForInterp[0] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[7] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[8] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[9] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[10] = srcRowPtrsForInterp[4] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[11] = srcRowPtrsForInterp[5] + srcDescPtr->strides.cStride;
+                if(srcDescPtr->c == 3)
+                {
+                    srcRowPtrsForInterp[6] = srcRowPtrsForInterp[0] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[7] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[8] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[9] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[10] = srcRowPtrsForInterp[4] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[11] = srcRowPtrsForInterp[5] + srcDescPtr->strides.cStride;
 
-                srcRowPtrsForInterp[12] = srcRowPtrsForInterp[6] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[13] = srcRowPtrsForInterp[7] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[14] = srcRowPtrsForInterp[8] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
-                srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[12] = srcRowPtrsForInterp[6] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[13] = srcRowPtrsForInterp[7] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[14] = srcRowPtrsForInterp[8] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[15] = srcRowPtrsForInterp[9] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[16] = srcRowPtrsForInterp[10] + srcDescPtr->strides.cStride;
+                    srcRowPtrsForInterp[17] = srcRowPtrsForInterp[11] + srcDescPtr->strides.cStride;
+                }
+                Rpp32f lanczosCoeffsY[kernelSize];
                 compute_lanczos3_coefficients(lanczosCoeffsY, weightParams[0]);
                 int vectorLoopCount = 0;
 #if __AVX2__
-                __m256 pLanczosCoeffX, pLanczosCoeffY[6];
+                __m256 pLanczosCoeffY[kernelSize];
                 pLanczosCoeffY[0] = _mm256_set1_ps(lanczosCoeffsY[0]);
                 pLanczosCoeffY[1] = _mm256_set1_ps(lanczosCoeffsY[1]);
                 pLanczosCoeffY[2] = _mm256_set1_ps(lanczosCoeffsY[2]);
@@ -9876,20 +9917,23 @@ omp_set_dynamic(0);
                 pLanczosCoeffY[4] = _mm256_set1_ps(lanczosCoeffsY[4]);
                 pLanczosCoeffY[5] = _mm256_set1_ps(lanczosCoeffsY[5]);
 #endif
-                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += 6)
+                for (int count = 0; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++, count += kernelSize)
                 {
                     Rpp8s *dstPtrTempChn;
                     dstPtrTempChn = dstPtrTemp;
 #if __AVX2__
+                    __m256 pLanczosCoeffX, pLanczosCoeffs[kernelSize];
                     pLanczosCoeffX = _mm256_loadu_ps(lanczosCoeffsX + count);
+                    compute_final_lanczos3_coefficients(pLanczosCoeffX, pLanczosCoeffY, pLanczosCoeffs);
 #endif
                     for(int c = 0; c < dstDescPtr->c; c++)
                     {
 #if __AVX2__
-                        rpp_simd_load(rpp_lanczos3_load_i8pln1_to_f32pln1, srcRowPtrsForInterp + (c * 6), srcLocCF[vectorLoopCount], pRow);
-                        compute_lanczos3_interpolation_1c_avx(pRow, pLanczosCoeffX, pLanczosCoeffY, dstPtrTempChn);
+                        __m256 pRow[6];
+                        rpp_simd_load(rpp_lanczos3_load_i8pln1_to_f32pln1, srcRowPtrsForInterp + (c * kernelSize), srcLocCF[vectorLoopCount], pRow);
+                        compute_lanczos3_interpolation_1c_avx(pRow, pLanczosCoeffs, dstPtrTempChn);
 #else
-                        compute_lanczos3_interpolation(srcRowPtrsForInterp + (c * 6), srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, &dstPtrTempChn, 1);
+                        compute_lanczos3_interpolation(srcRowPtrsForInterp + (c * kernelSize), srcLocCF[vectorLoopCount], lanczosCoeffsX + count, lanczosCoeffsY, &dstPtrTempChn, 1);
 #endif
                         dstPtrTempChn += dstDescPtr->strides.cStride;
                     }
