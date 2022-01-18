@@ -8638,8 +8638,10 @@ omp_set_dynamic(0);
         Rpp32f wRatio = ((Rpp32f)(roiPtr->xywhROI.roiWidth)) / ((Rpp32f)(dstImgSize[batchCount].width));
         Rpp32f hRatio = ((Rpp32f)(roiPtr->xywhROI.roiHeight)) / ((Rpp32f)(dstImgSize[batchCount].height));
 
-        if(hRatio < 1 || wRatio < 1)
+        if(hRatio < 1 && wRatio < 1)
         {
+            // Triangular interpolation is equivalent to Bilinear interpolation when upsampling
+            // hence the call is directed to bilinear resize function
             resize_bilinear_u8_u8_host_tensor(srcPtr, srcDescPtr, dstPtr, dstDescPtr, dstImgSize, roiTensorPtrSrc, roiType, srcLayoutParams);
         }
         else
@@ -8655,7 +8657,6 @@ omp_set_dynamic(0);
             dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
             srcPtrChannel = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
             dstPtrChannel = dstPtrImage;
-            Rpp32f weightParams[4];
 
             if (srcDescPtr->c == 3)
             {
@@ -8733,8 +8734,10 @@ omp_set_dynamic(0);
         Rpp32f wRatio = ((Rpp32f)(roiPtr->xywhROI.roiWidth)) / ((Rpp32f)(dstImgSize[batchCount].width));
         Rpp32f hRatio = ((Rpp32f)(roiPtr->xywhROI.roiHeight)) / ((Rpp32f)(dstImgSize[batchCount].height));
 
-        if(hRatio < 1 || wRatio < 1)
+        if(hRatio < 1 && wRatio < 1)
         {
+            // Triangular interpolation is equivalent to Bilinear interpolation when upsampling
+            // hence the call is directed to bilinear resize function
             resize_bilinear_f32_f32_host_tensor(srcPtr, srcDescPtr, dstPtr, dstDescPtr, dstImgSize, roiTensorPtrSrc, roiType, srcLayoutParams);
         }
         else
@@ -8750,7 +8753,6 @@ omp_set_dynamic(0);
             dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
             srcPtrChannel = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
             dstPtrChannel = dstPtrImage;
-            Rpp32f weightParams[4];
 
             if (srcDescPtr->c == 3)
             {
@@ -8828,8 +8830,10 @@ omp_set_dynamic(0);
         Rpp32f wRatio = ((Rpp32f)(roiPtr->xywhROI.roiWidth)) / ((Rpp32f)(dstImgSize[batchCount].width));
         Rpp32f hRatio = ((Rpp32f)(roiPtr->xywhROI.roiHeight)) / ((Rpp32f)(dstImgSize[batchCount].height));
 
-        if(hRatio < 1 || wRatio < 1)
+        if(hRatio < 1 && wRatio < 1)
         {
+            // Triangular interpolation is equivalent to Bilinear interpolation when upsampling
+            // hence the call is directed to bilinear resize function
             resize_bilinear_f16_f16_host_tensor(srcPtr, srcDescPtr, dstPtr, dstDescPtr, dstImgSize, roiTensorPtrSrc, roiType, srcLayoutParams);
         }
         else
@@ -8845,7 +8849,6 @@ omp_set_dynamic(0);
             dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
             srcPtrChannel = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
             dstPtrChannel = dstPtrImage;
-            Rpp32f weightParams[4];
 
             if (srcDescPtr->c == 3)
             {
@@ -8923,8 +8926,10 @@ omp_set_dynamic(0);
         Rpp32f wRatio = ((Rpp32f)(roiPtr->xywhROI.roiWidth)) / ((Rpp32f)(dstImgSize[batchCount].width));
         Rpp32f hRatio = ((Rpp32f)(roiPtr->xywhROI.roiHeight)) / ((Rpp32f)(dstImgSize[batchCount].height));
 
-        if(hRatio < 1 || wRatio < 1)
+        if(hRatio < 1 && wRatio < 1)
         {
+            // Triangular interpolation is equivalent to Bilinear interpolation when upsampling
+            // hence the call is directed to bilinear resize function
             resize_bilinear_i8_i8_host_tensor(srcPtr, srcDescPtr, dstPtr, dstDescPtr, dstImgSize, roiTensorPtrSrc, roiType, srcLayoutParams);
         }
         else
@@ -8940,7 +8945,6 @@ omp_set_dynamic(0);
             dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
             srcPtrChannel = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
             dstPtrChannel = dstPtrImage;
-            Rpp32f weightParams[4];
 
             if (srcDescPtr->c == 3)
             {

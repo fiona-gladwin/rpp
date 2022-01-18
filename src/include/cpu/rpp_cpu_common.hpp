@@ -4105,6 +4105,7 @@ template <typename T>
 inline void resize_generic_host_kernel(T **srcPtr, RpptDescPtr srcDescPtr, T **dstPtr, RpptDescPtr dstDescPtr, RpptImagePatch dstImgSize,
                                        Rpp32f hRatio, Rpp32f wRatio, Rpp32s heightLimit, Rpp32f widthLimit)
 {
+    // For PLN3 and PKD3 input
     Rpp32f hOffset = (hRatio - 1) * 0.5f;
     Rpp32f wOffset = (wRatio - 1) * 0.5f;
     Rpp32s hKernelSize = std::ceil((hRatio < 1 ? 1 : hRatio)* 2);
@@ -4175,6 +4176,7 @@ template <typename T>
 inline void resize_generic_host_kernel(T *srcPtr, RpptDescPtr srcDescPtr, T *dstPtr, RpptDescPtr dstDescPtr, RpptImagePatch dstImgSize,
                                        Rpp32f hRatio, Rpp32f wRatio, Rpp32s heightLimit, Rpp32f widthLimit)
 {
+    // For PLN1 input
     Rpp32f hOffset = (hRatio - 1) * 0.5f;
     Rpp32f wOffset = (wRatio - 1) * 0.5f;
     Rpp32s hKernelSize = std::ceil((hRatio < 1 ? 1 : hRatio)* 2);
