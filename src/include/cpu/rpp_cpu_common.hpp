@@ -36,6 +36,11 @@ typedef halfhpp Rpp16f;
 #define CHANNEL_G                       1
 #define CHANNEL_B                       2
 
+/*Constants used for Gaussian interpolation*/
+// Here sigma is considered as 0.5f
+#define GAUSSCONSTANT1                 -2.0f          // 1 / (sigma * sigma * -1 * 2);
+#define GAUSSCONSTANT2                  0.7978845608028654f // 1 / ((2 * PI)*(1/2) * sigma)
+
 static uint16_t wyhash16_x;
 
 alignas(64) const Rpp32f sch_mat[16] = {0.701f, -0.299f, -0.300f, 0.0f, -0.587f, 0.413f, -0.588f, 0.0f, -0.114f, -0.114f, 0.886f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
@@ -4004,7 +4009,7 @@ inline void compute_resize_src_loc_sse(__m128 &pDstLoc, __m128 &pScale, __m128 &
     __m128 pLocFloor = _mm_floor_ps(pLoc);
     pWeight[0] = _mm_sub_ps(pLoc, pLocFloor);
     pWeight[1] = _mm_sub_ps(xmm_p1, pWeight[0]);
-    pLocFloor = _mm_min_ps(pLocFloor, pLimit);
+    pLocFloor = _mm_max_ps(_mm_min_ps(pLocFloor, pLimit), xmm_p0);
     if(hasRGBChannels)
         pLocFloor = _mm_mul_ps(pLocFloor, xmm_pChannel);
     __m128i pxLocFloor = _mm_cvtps_epi32(pLocFloor);
@@ -4259,27 +4264,131 @@ inline void compute_lanczos3_interpolation_1c_avx(__m256 *srcPixels, __m256 *coe
     saturate_pixel((tempArr[0] + tempArr[1] + tempArr[2] + tempArr[3] + tempArr[4] + tempArr[5]), dstPtr);
 }
 
-inline void compute_triangular_coefficient(Rpp32f weight, Rpp32f *coeff)
+inline void compute_gaussian_coefficient(Rpp32f weightParam, Rpp32f &gaussianCoeff)
 {
-    *coeff = 1 - std::fabs(weight);
-    *coeff = *coeff < 0 ? 0 : *coeff;
+    gaussianCoeff = expf(weightParam * weightParam * GAUSSCONSTANT1) * GAUSSCONSTANT2;
 }
 
-inline void compute_index_and_weights(Rpp32s loc, Rpp32f weight, Rpp32s kernelSize, Rpp32s limit, Rpp32s *index, Rpp32f *coeffs, Rpp32u srcStride = 1)
+inline void compute_gaussian_coefficient_sse(Rpp32f weightParam, __m128 &pGaussianCoeff)
+{
+    __m128 pWeightParam = _mm_set1_ps(weightParam);
+    pGaussianCoeff = _mm_mul_ps(fast_exp_sse(_mm_mul_ps(_mm_mul_ps(pWeightParam, pWeightParam), pGaussConstant1)), pGaussConstant2);
+}
+
+template <typename T>
+inline void compute_gaussian_interpolation_3c_pkd(T **srcRowPtrsForInterp, Rpp32s loc, Rpp32f *gaussianCoeffs, T *dstPtrR, T *dstPtrG, T *dstPtrB)
+{
+    Rpp32s channels = 3;
+    saturate_pixel(((*(srcRowPtrsForInterp[0] + loc)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[0] + loc + 3)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[1] + loc)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 3)) * gaussianCoeffs[3]), dstPtrR);
+    saturate_pixel(((*(srcRowPtrsForInterp[0] + loc + 1)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[0] + loc + 4)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 1)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 4)) * gaussianCoeffs[3]), dstPtrG);
+    saturate_pixel(((*(srcRowPtrsForInterp[0] + loc + 2)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[0] + loc + 5)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 2)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 5)) * gaussianCoeffs[3]), dstPtrB);
+}
+
+template <typename T>
+inline void compute_gaussian_interpolation_3c_pln(T **srcRowPtrsForInterp, Rpp32s loc, Rpp32f *gaussianCoeffs, T *dstPtrR, T *dstPtrG, T *dstPtrB)
+{
+    Rpp32s channels = 3;
+    saturate_pixel(((*(srcRowPtrsForInterp[0] + loc)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[0] + loc + 3)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[1] + loc)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 3)) * gaussianCoeffs[3]), dstPtrR);
+    saturate_pixel(((*(srcRowPtrsForInterp[2] + loc + 1)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[2] + loc + 4)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[3] + loc + 1)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[3] + loc + 4)) * gaussianCoeffs[3]), dstPtrG);
+    saturate_pixel(((*(srcRowPtrsForInterp[4] + loc + 2)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[4] + loc + 5)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[5] + loc + 2)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[5] + loc + 5)) * gaussianCoeffs[3]), dstPtrB);
+}
+
+template <typename T>
+inline void compute_gaussian_interpolation_1c(T **srcRowPtrsForInterp, Rpp32s loc, Rpp32f *gaussianCoeffs, T *dstPtr)
+{
+    Rpp32s channels = 3;
+    saturate_pixel(((*(srcRowPtrsForInterp[0] + loc)) * gaussianCoeffs[0]) +
+                   ((*(srcRowPtrsForInterp[0] + loc + 3)) * gaussianCoeffs[1]) +
+                   ((*(srcRowPtrsForInterp[1] + loc)) * gaussianCoeffs[2]) +
+                   ((*(srcRowPtrsForInterp[1] + loc + 3)) * gaussianCoeffs[3]), dstPtr);
+}
+
+inline void compute_2gaussian_coefficients(Rpp32f *weights, Rpp32f &coeff1, Rpp32f &coeff2)
+{
+    compute_gaussian_coefficient(weights[1], coeff1);
+    compute_gaussian_coefficient(weights[0], coeff2);
+    Rpp32f sum = coeff1 + coeff2;
+    if(sum)
+    {
+        sum = 1 / sum;
+        coeff1 = coeff1 * sum;
+        coeff2 = coeff2 * sum;
+    }
+}
+
+inline void compute_2gaussian_coefficients_sse(Rpp32f* weights, __m128 &pCoeff1, __m128 &pCoeff2)
+{
+    compute_gaussian_coefficient_sse(weights[1], pCoeff1);
+    compute_gaussian_coefficient_sse(weights[0], pCoeff2);
+    __m128 pSum = _mm_add_ps(pCoeff1, pCoeff2);
+    if(_mm_extract_ps(pSum, 0))
+    {
+        pSum = _mm_div_ps(xmm_p1, pSum);
+        pCoeff1 = _mm_mul_ps(pCoeff1, pSum);
+        pCoeff2 = _mm_mul_ps(pCoeff2, pSum);
+    }
+}
+
+inline void compute_triangular_coefficient(Rpp32f weight, Rpp32f &coeff)
+{
+    coeff = 1 - std::fabs(weight);
+    coeff = coeff < 0 ? 0 : coeff;
+}
+
+inline void compute_index_and_weights(Rpp32s loc, Rpp32f weight, Rpp32s kernelSize, Rpp32s limit, Rpp32s *index,
+                                      Rpp32f *coeffs, RpptInterpolationType interpType, Rpp32u srcStride = 1)
 {
     Rpp32f kernelSize2 = kernelSize / 2;
     Rpp32f kernelSize2Channel = kernelSize2 * srcStride;
     limit = limit * srcStride;
-    for(int k = 0; k < kernelSize; k++)
+    Rpp32f sum = 0;
+    if(interpType == RpptInterpolationType::TRIANGULAR)
     {
-        index[k] = RPPPRANGECHECKINT((int)(loc + (k * srcStride) - kernelSize2Channel), 0, limit);
-        compute_triangular_coefficient(weight - k + kernelSize2 , coeffs + k);
+        for(int k = 0; k < kernelSize; k++)
+        {
+            index[k] = RPPPRANGECHECKINT((int)(loc + (k * srcStride) - kernelSize2Channel), 0, limit);
+            compute_triangular_coefficient(weight - k + kernelSize2 , coeffs[k]);
+            sum += coeffs[k];
+        }
+    }
+    else if(interpType == RpptInterpolationType::GAUSSIAN)
+    {
+        for(int k = 0; k < kernelSize; k++)
+        {
+            index[k] = RPPPRANGECHECKINT((int)(loc + (k * srcStride) - kernelSize2Channel), 0, limit);
+            compute_gaussian_coefficient(weight - k + kernelSize2 , coeffs[k]);
+            sum += coeffs[k];
+        }
+    }
+    if(sum)
+    {
+        sum = 1 / sum;
+        for(int k = 0; k < kernelSize; k++)
+            coeffs[k] = coeffs[k] * sum;
     }
 }
 
 template <typename T>
 inline void resize_generic_host_kernel(T **srcPtr, RpptDescPtr srcDescPtr, T **dstPtr, RpptDescPtr dstDescPtr, RpptImagePatch dstImgSize,
-                                       Rpp32f hRatio, Rpp32f wRatio, Rpp32s heightLimit, Rpp32f widthLimit)
+                                       Rpp32f hRatio, Rpp32f wRatio, Rpp32s heightLimit, Rpp32f widthLimit, RpptInterpolationType interpType)
 {
     // For PLN3 and PKD3 input
     Rpp32f hOffset = (hRatio - 1) * 0.5f;
@@ -4294,7 +4403,7 @@ inline void resize_generic_host_kernel(T **srcPtr, RpptDescPtr srcDescPtr, T **d
     for (int i = 0, ind = 0; i < dstImgSize.width; i++, ind+= wKernelSize)
     {
         compute_resize_src_loc(i, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[0], wOffset, srcDescPtr->strides.wStride);
-        compute_index_and_weights(srcLocationColumnFloor, weightParams[0], wKernelSize, widthLimit, &colIndices[ind], &colWeightParams[ind], srcDescPtr->strides.wStride);
+        compute_index_and_weights(srcLocationColumnFloor, weightParams[0], wKernelSize, widthLimit, &colIndices[ind], &colWeightParams[ind], interpType, srcDescPtr->strides.wStride);
     }
 
     for(int i = 0; i < dstImgSize.height; i++)
@@ -4306,7 +4415,7 @@ inline void resize_generic_host_kernel(T **srcPtr, RpptDescPtr srcDescPtr, T **d
 
         T *srcRowPtrsForInterp[3][hKernelSize];
         compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
-        compute_index_and_weights(srcLocationRowFloor, weightParams[0], hKernelSize, heightLimit, rowIndices, rowWeightParams);
+        compute_index_and_weights(srcLocationRowFloor, weightParams[0], hKernelSize, heightLimit, rowIndices, rowWeightParams, interpType);
 
         for(int k = 0; k < hKernelSize; k++)
         {
@@ -4350,7 +4459,7 @@ inline void resize_generic_host_kernel(T **srcPtr, RpptDescPtr srcDescPtr, T **d
 
 template <typename T>
 inline void resize_generic_host_kernel(T *srcPtr, RpptDescPtr srcDescPtr, T *dstPtr, RpptDescPtr dstDescPtr, RpptImagePatch dstImgSize,
-                                       Rpp32f hRatio, Rpp32f wRatio, Rpp32s heightLimit, Rpp32f widthLimit)
+                                       Rpp32f hRatio, Rpp32f wRatio, Rpp32s heightLimit, Rpp32f widthLimit, RpptInterpolationType interpType)
 {
     // For PLN1 input
     Rpp32f hOffset = (hRatio - 1) * 0.5f;
@@ -4365,7 +4474,7 @@ inline void resize_generic_host_kernel(T *srcPtr, RpptDescPtr srcDescPtr, T *dst
     for (int i = 0, ind = 0; i < dstImgSize.width; i++, ind+= wKernelSize)
     {
         compute_resize_src_loc(i, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[0], wOffset, srcDescPtr->strides.wStride);
-        compute_index_and_weights(srcLocationColumnFloor, weightParams[0], wKernelSize, widthLimit, &colIndices[ind], &colWeightParams[ind], srcDescPtr->strides.wStride);
+        compute_index_and_weights(srcLocationColumnFloor, weightParams[0], wKernelSize, widthLimit, &colIndices[ind], &colWeightParams[ind], interpType, srcDescPtr->strides.wStride);
     }
 
     for(int i = 0; i < dstImgSize.height; i++)
@@ -4375,7 +4484,7 @@ inline void resize_generic_host_kernel(T *srcPtr, RpptDescPtr srcDescPtr, T *dst
 
         T *srcRowPtrsForInterp[hKernelSize];
         compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
-        compute_index_and_weights(srcLocationRowFloor, weightParams[0], hKernelSize, heightLimit, rowIndices, rowWeightParams);
+        compute_index_and_weights(srcLocationRowFloor, weightParams[0], hKernelSize, heightLimit, rowIndices, rowWeightParams, interpType);
 
         for(int k = 0; k < hKernelSize; k++)
         {

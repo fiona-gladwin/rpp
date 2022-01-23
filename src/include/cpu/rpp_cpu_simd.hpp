@@ -76,6 +76,8 @@ const __m128i xmm_maskR = _mm_setr_epi8(0, 0x80, 0x80, 0x80, 3, 0x80, 0x80, 0x80
 const __m128i xmm_maskG = _mm_setr_epi8(1, 0x80, 0x80, 0x80, 4, 0x80, 0x80, 0x80, 7, 0x80, 0x80, 0x80, 10, 0x80, 0x80, 0x80);
 const __m128i xmm_maskB = _mm_setr_epi8(2, 0x80, 0x80, 0x80, 5, 0x80, 0x80, 0x80, 8, 0x80, 0x80, 0x80, 11, 0x80, 0x80, 0x80);
 const __m128 xmm_pChannel = _mm_set1_ps(3.0f);
+const __m128 pGaussConstant1 = _mm_set1_ps(-2.0f); // 1 / (sigma * sigma * -1 * 2);
+const __m128 pGaussConstant2 = _mm_set1_ps(0.7978845608028654f); // 1 / ((2 * PI)*(1/2) * sigma)
 
 const __m256 avx_p0 = _mm256_set1_ps(0.0f);
 const __m256 avx_p1 = _mm256_set1_ps(1.0f);
@@ -412,11 +414,12 @@ inline RppStatus rpp_load12_f32pln3_to_f32pln3(Rpp32f *srcPtrR, Rpp32f *srcPtrG,
 
 inline RppStatus rpp_store12_f32pln3_to_f32pkd3(Rpp32f *dstPtr, __m128 *p)
 {
-    _MM_TRANSPOSE4_PS(p[0], p[1], p[2], p[3]);
+    __m128 pTemp = xmm_p0;
+    _MM_TRANSPOSE4_PS(p[0], p[1], p[2], pTemp);
     _mm_storeu_ps(dstPtr, p[0]);
     _mm_storeu_ps(&dstPtr[3], p[1]);
     _mm_storeu_ps(&dstPtr[6], p[2]);
-    _mm_storeu_ps(&dstPtr[9], p[3]);
+    _mm_storeu_ps(&dstPtr[9], pTemp);
 
     return RPP_SUCCESS;
 }
