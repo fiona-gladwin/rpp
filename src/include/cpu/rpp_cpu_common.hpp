@@ -4004,7 +4004,7 @@ inline void compute_resize_src_loc(Rpp32s dstLocation, Rpp32f scale, Rpp32u limi
 
 inline void compute_resize_src_loc_sse(__m128 &pDstLoc, __m128 &pScale, __m128 &pLimit, Rpp32s *srcLoc, __m128 *pWeight, __m128 pOffset = xmm_p0, bool hasRGBChannels = false)
 {
-    __m128 pLoc = _mm_add_ps(_mm_mul_ps(pDstLoc, pScale), pOffset);
+    __m128 pLoc = _mm_fmadd_ps(pDstLoc, pScale, pOffset);
     pDstLoc = _mm_add_ps(pDstLoc, xmm_p4);
     __m128 pLocFloor = _mm_floor_ps(pLoc);
     pWeight[0] = _mm_sub_ps(pLoc, pLocFloor);

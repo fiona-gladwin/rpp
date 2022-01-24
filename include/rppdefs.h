@@ -207,7 +207,7 @@ typedef enum
 
 typedef enum
 {
-    NEAREST_NEIGHBOR,
+    NEAREST_NEIGHBOR = 0,
     BILINEAR,
     BICUBIC,
     LANCZOS,
