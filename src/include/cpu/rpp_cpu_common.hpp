@@ -3967,8 +3967,8 @@ inline void compute_resize_src_loc(Rpp32s dstLocation, Rpp32f scale, Rpp32u limi
 {
     Rpp32f srcLocation = ((Rpp32f) dstLocation) * scale + offset;
     Rpp32s srcLocationFloor = (Rpp32s) RPPFLOOR(srcLocation);
-    weight[0] = srcLocation - srcLocationFloor;
-    weight[1] = 1 - weight[0];
+    weight[1] = srcLocation - srcLocationFloor;
+    weight[0] = 1 - weight[1];
     srcLoc = ((srcLocationFloor > limit) ? limit : srcLocationFloor) * srcStride;
 }
 
@@ -4040,4 +4040,58 @@ inline void compute_bilinear_interpolation_1c_sse(__m128 *pSrcPixels, __m128 *pB
     pDstPixels = _mm_fmadd_ps(pSrcPixels[3], pBilinearCoeffs[3], _mm_fmadd_ps(pSrcPixels[2], pBilinearCoeffs[2], _mm_fmadd_ps(pSrcPixels[1], pBilinearCoeffs[1], _mm_mul_ps(pSrcPixels[0], pBilinearCoeffs[0]))));
 }
 
+
+inline void ResampleVertical(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr inputDescPtr, RpptDescPtr outputDescPtr,
+                        RpptImagePatch inputImgSize, RpptImagePatch outputImgSize, Rpp32s *index, Rpp32f *coeffs, Rpp32s kernelSize)
+{
+    Rpp8u **in_row_ptrs = static_cast< Rpp8u **>(malloc(kernelSize * sizeof(Rpp8u *)));
+
+    for (int y = 0; y < outputImgSize.height; y++)
+    {
+        Rpp8u *out_row = outputPtr + y * inputDescPtr->strides.hStride;
+
+        for (int k = 0; k < kernelSize; k++)
+        {
+            int sy = index[y] + k;
+            if (sy < 0) sy = 0;
+            else if (sy > inputImgSize.height - 1) sy = inputImgSize.height - 1;
+            in_row_ptrs[k] = inputPtr + sy * inputDescPtr->strides.hStride;
+        }
+        Rpp32s k0 = y * kernelSize;
+        Rpp32s bufferLength = inputImgSize.width * inputDescPtr->strides.wStride;
+        for (int x = 0; x < bufferLength; x++)
+        {
+            float tmp = 0;
+            for (int k = 0; k < kernelSize; k++)
+                tmp += ((float)in_row_ptrs[k][x] * coeffs[k0 + k]);
+            out_row[x] = (Rpp8u)tmp;
+        }
+    }
+}
+
+inline void ResampleHorizontal(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr inputDescPtr, RpptDescPtr outputDescPtr,
+                        RpptImagePatch inputImgSize, RpptImagePatch outputImgSize, Rpp32s *index, Rpp32f *coeffs, Rpp32s kernelSize)
+{
+
+    for (int y = 0; y < outputImgSize.height; y++)
+    {
+        Rpp8u *out_row = outputPtr + y * outputDescPtr->strides.hStride;
+        Rpp8u *in_row = inputPtr + y * inputDescPtr->strides.hStride;
+
+        for (int x = 0; x < outputImgSize.width; x++)
+        {
+            int x0 = index[x];
+            int k0 = x * kernelSize;
+            float sum = 0;
+            for (int k = 0; k < kernelSize; k++)
+            {
+                int srcx = x0 + k;
+                if (srcx < 0) srcx = 0;
+                if (srcx > inputImgSize.width - 1) srcx = inputImgSize.width - 1;
+                sum += (coeffs[k0 + k] * (float)in_row[srcx]);
+            }
+            out_row[x] = (Rpp8u)sum;
+        }
+    }
+}
 #endif //RPP_CPU_COMMON_H

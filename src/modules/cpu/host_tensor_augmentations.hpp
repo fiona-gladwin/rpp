@@ -7493,236 +7493,36 @@ omp_set_dynamic(0);
         Rpp32u widthLimit = roiPtr->xywhROI.roiWidth - 1;
         Rpp32f hOffset = (hRatio - 1) * 0.5f;
         Rpp32f wOffset = (wRatio - 1) * 0.5f;
+        
+        Rpp32s kernelSize = 2;
+        Rpp32s rowIndex[dstImgSize[batchCount].height], colIndex[dstImgSize[batchCount].width];
+        Rpp32f rowCoeffs[dstImgSize[batchCount].height * kernelSize], colCoeffs[dstImgSize[batchCount].width * kernelSize];
 
-        Rpp8u *srcPtrChannel, *dstPtrChannel, *srcPtrImage, *dstPtrImage;
+        // Compute row index and coefficients
+        for(int indexCount = 0, coeffCount = 0; indexCount < dstImgSize[batchCount].height; indexCount++, coeffCount += 2)
+            compute_resize_src_loc(indexCount, hRatio, heightLimit, rowIndex[indexCount], &rowCoeffs[coeffCount], hOffset);
+        // Compute col index and coefficients
+        for(int indexCount = 0, coeffCount = 0; indexCount < dstImgSize[batchCount].width; indexCount++, coeffCount += 2)
+            compute_resize_src_loc(indexCount, wRatio, widthLimit, colIndex[indexCount], &colCoeffs[coeffCount], wOffset);
+
+        Rpp8u *srcPtrImage, *dstPtrImage, *interPtr;
         srcPtrImage = srcPtr + batchCount * srcDescPtr->strides.nStride;
         dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
-        srcPtrChannel = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
-        dstPtrChannel = dstPtrImage;
-        Rpp32f srcLocationRow, srcLocationColumn, pixel;
-        Rpp32s srcLocationRowFloor, srcLocationColumnFloor;
-        Rpp32u alignedLength = dstImgSize[batchCount].width & ~3;
-        __m128 pWRatio = _mm_set1_ps(wRatio);
-        __m128 pWOffset = _mm_set1_ps(wOffset);
-        __m128 pDstLocInit = _mm_setr_ps(0, 1, 2, 3);
-        __m128 pWidthLimit = _mm_set1_ps((float)widthLimit);
-        __m128 pWeightParams[4], pBilinearCoeffs[4], pColFloor, pDstLoc;
-        __m128i pxColFloor;
-        Rpp32s srcLocCF[4] = {0};
-        Rpp32f weightParams[4], bilinearCoeffs[4];
+        srcPtrImage = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
 
-        // Resize with fused output-layout toggle (NHWC -> NCHW)
-        if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NCHW))
-        {
-            Rpp8u *dstPtrRowR, *dstPtrRowG, *dstPtrRowB;
-            dstPtrRowR = dstPtrChannel;
-            dstPtrRowG = dstPtrRowR + dstDescPtr->strides.cStride;
-            dstPtrRowB = dstPtrRowG + dstDescPtr->strides.cStride;
+        interPtr = (Rpp8u *)malloc(srcDescPtr->strides.hStride * dstImgSize[batchCount].height * srcDescPtr->c * sizeof(Rpp8u));
 
-            for(int i = 0; i < dstImgSize[batchCount].height; i++)
-            {
-                Rpp8u *dstPtrTempR, *dstPtrTempG, *dstPtrTempB;
-                dstPtrTempR = dstPtrRowR;
-                dstPtrTempG = dstPtrRowG;
-                dstPtrTempB = dstPtrRowB;
+        RpptImagePatch srcImgSize;
+        srcImgSize.width = roiPtr->xywhROI.roiWidth;
+        srcImgSize.height = roiPtr->xywhROI.roiHeight;
 
-                Rpp8u *srcRowPtrsForInterp[2];
-                compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
-                srcRowPtrsForInterp[0] = srcPtrChannel + srcLocationRowFloor * srcDescPtr->strides.hStride;    // srcPtrTopRow for bilinear interpolation
-                srcRowPtrsForInterp[1]  = srcRowPtrsForInterp[0] + srcDescPtr->strides.hStride;                // srcPtrBottomRow for bilinear interpolation
-                pWeightParams[0] = _mm_set1_ps(weightParams[0]);
-                pWeightParams[1]  = _mm_set1_ps(weightParams[1]);
-                pDstLoc = pDstLocInit;
+        RpptImagePatch tempImgSize;
+        tempImgSize.width = roiPtr->xywhROI.roiWidth;
+        tempImgSize.height = dstImgSize[batchCount].height;
 
-                int vectorLoopCount = 0;
-                for (; vectorLoopCount < alignedLength; vectorLoopCount += 4)
-                {
-                    __m128 pRow[12], pPixels[3];
-
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], pWOffset, true);
-                    compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
-
-                    rpp_simd_load(rpp_bilinear_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
-                    compute_bilinear_interpolation_3c_sse(pRow, pBilinearCoeffs, pPixels);
-                    rpp_simd_store(rpp_store12_f32pln3_to_u8pln3, dstPtrTempR, dstPtrTempG, dstPtrTempB, pPixels);
-
-                    dstPtrTempR += 4;
-                    dstPtrTempG += 4;
-                    dstPtrTempB += 4;
-                }
-                for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
-                {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], wOffset, srcDescPtr->strides.wStride);
-                    compute_bilinear_coefficients(weightParams, bilinearCoeffs);
-                    compute_bilinear_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, bilinearCoeffs, dstPtrTempR, dstPtrTempG, dstPtrTempB);
-
-                    dstPtrTempR++;
-                    dstPtrTempG++;
-                    dstPtrTempB++;
-                }
-
-                dstPtrRowR += dstDescPtr->strides.hStride;
-                dstPtrRowG += dstDescPtr->strides.hStride;
-                dstPtrRowB += dstDescPtr->strides.hStride;
-            }
-        }
-
-        // Resize with fused output-layout toggle (NCHW -> NHWC)
-        else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NHWC))
-        {
-            Rpp8u *dstPtrRow;
-            dstPtrRow = dstPtrChannel;
-
-            for(int i = 0; i < dstImgSize[batchCount].height; i++)
-            {
-                Rpp8u *dstPtrTemp;
-                dstPtrTemp = dstPtrRow;
-
-                Rpp8u *srcRowPtrsForInterp[6];
-                compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
-                srcRowPtrsForInterp[0] = srcPtrChannel + srcLocationRowFloor * srcDescPtr->strides.hStride;    // srcPtrTopRowR for bilinear interpolation
-                srcRowPtrsForInterp[1] = srcRowPtrsForInterp[0] + srcDescPtr->strides.hStride;                 // srcPtrBottomRowR for bilinear interpolation
-                srcRowPtrsForInterp[2] = srcRowPtrsForInterp[0] + srcDescPtr->strides.cStride;     // srcPtrTopRowG for bilinear interpolation
-                srcRowPtrsForInterp[3] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;     // srcPtrBottomRowG for bilinear interpolation
-                srcRowPtrsForInterp[4] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;     // srcPtrTopRowB for bilinear interpolation
-                srcRowPtrsForInterp[5] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;     // srcPtrBottomRowB for bilinear interpolation
-                pWeightParams[0] = _mm_set1_ps(weightParams[0]);
-                pWeightParams[1]  = _mm_set1_ps(weightParams[1]);
-                pDstLoc = pDstLocInit;
-
-                int vectorLoopCount = 0;
-                for (; vectorLoopCount < alignedLength; vectorLoopCount += 4)
-                {
-                    __m128 pRow[12], pPixels[3];
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], pWOffset);
-                    compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
-                    rpp_simd_load(rpp_bilinear_load_u8pln1_to_f32pln1, &srcRowPtrsForInterp[0], srcLocCF, pRow);
-                    rpp_simd_load(rpp_bilinear_load_u8pln1_to_f32pln1, &srcRowPtrsForInterp[2], srcLocCF, pRow + 4);
-                    rpp_simd_load(rpp_bilinear_load_u8pln1_to_f32pln1, &srcRowPtrsForInterp[4], srcLocCF, pRow + 8);
-                    compute_bilinear_interpolation_3c_sse(pRow, pBilinearCoeffs, pPixels);
-                    rpp_simd_store(rpp_store12_f32pln3_to_u8pkd3, dstPtrTemp, pPixels);
-                    dstPtrTemp += 12;
-                }
-                for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
-                {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], wOffset);
-                    compute_bilinear_coefficients(weightParams, bilinearCoeffs);
-                    compute_bilinear_interpolation_3c_pln(srcRowPtrsForInterp, srcLocationColumnFloor, bilinearCoeffs, &dstPtrTemp[0], &dstPtrTemp[1], &dstPtrTemp[2]);
-                    dstPtrTemp += 3;
-                }
-
-                dstPtrRow += dstDescPtr->strides.hStride;
-            }
-        }
-
-        // Resize without fused output-layout toggle (NHWC -> NHWC)
-        else if ((srcDescPtr->c == 3) && (srcDescPtr->layout == RpptLayout::NHWC) && (dstDescPtr->layout == RpptLayout::NHWC))
-        {
-            Rpp8u *dstPtrRow;
-            dstPtrRow = dstPtrChannel;
-
-            for(int i = 0; i < dstImgSize[batchCount].height; i++)
-            {
-                Rpp8u *dstPtrTemp;
-                dstPtrTemp = dstPtrRow;
-
-                Rpp8u *srcRowPtrsForInterp[2];
-                compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
-                srcRowPtrsForInterp[0] = srcPtrChannel + srcLocationRowFloor * srcDescPtr->strides.hStride;    // srcPtrTopRow for bilinear interpolation
-                srcRowPtrsForInterp[1]  = srcRowPtrsForInterp[0] + srcDescPtr->strides.hStride;                // srcPtrBottomRow for bilinear interpolation
-                pWeightParams[0] = _mm_set1_ps(weightParams[0]);
-                pWeightParams[1]  = _mm_set1_ps(weightParams[1]);
-                pDstLoc = pDstLocInit;
-
-                int vectorLoopCount = 0;
-                for (; vectorLoopCount < alignedLength; vectorLoopCount += 4)
-                {
-                    __m128 pRow[12], pPixels[3];
-
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], pWOffset, true);
-                    compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
-
-                    rpp_simd_load(rpp_bilinear_load_u8pkd3_to_f32pln3, srcRowPtrsForInterp, srcLocCF, pRow);
-                    compute_bilinear_interpolation_3c_sse(pRow, pBilinearCoeffs, pPixels);
-                    rpp_simd_store(rpp_store12_f32pln3_to_u8pkd3, dstPtrTemp, pPixels);
-
-                    dstPtrTemp += 12;
-                }
-                for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
-                {
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], wOffset, srcDescPtr->strides.wStride);
-                    compute_bilinear_coefficients(weightParams, bilinearCoeffs);
-                    compute_bilinear_interpolation_3c_pkd(srcRowPtrsForInterp, srcLocationColumnFloor, bilinearCoeffs, &dstPtrTemp[0], &dstPtrTemp[1], &dstPtrTemp[2]);
-
-                    dstPtrTemp += 3;
-                }
-
-                dstPtrRow += dstDescPtr->strides.hStride;
-            }
-        }
-
-        // Resize without fused output-layout toggle (NCHW -> NCHW for 1 channel and 3 channel)
-        else if ((srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
-        {
-            Rpp8u *dstPtrRow;
-            dstPtrRow = dstPtrChannel;
-
-            for(int i = 0; i < dstImgSize[batchCount].height; i++)
-            {
-                Rpp8u *dstPtrTemp;
-                dstPtrTemp = dstPtrRow;
-
-                Rpp8u *srcRowPtrsForInterp[6];
-                compute_resize_src_loc(i, hRatio, heightLimit, srcLocationRowFloor, &weightParams[0], hOffset);
-                srcRowPtrsForInterp[0] = srcPtrChannel + srcLocationRowFloor * srcDescPtr->strides.hStride;   // srcPtrTopRowR for bilinear interpolation
-                srcRowPtrsForInterp[1] = srcRowPtrsForInterp[0] + srcDescPtr->strides.hStride;                // srcPtrBottomRowR for bilinear interpolation
-                srcRowPtrsForInterp[2] = srcRowPtrsForInterp[0] + srcDescPtr->strides.cStride;    // srcPtrTopRowG for bilinear interpolation
-                srcRowPtrsForInterp[3] = srcRowPtrsForInterp[1] + srcDescPtr->strides.cStride;    // srcPtrBottomRowG for bilinear interpolation
-                srcRowPtrsForInterp[4] = srcRowPtrsForInterp[2] + srcDescPtr->strides.cStride;    // srcPtrTopRowB for bilinear interpolation
-                srcRowPtrsForInterp[5] = srcRowPtrsForInterp[3] + srcDescPtr->strides.cStride;    // srcPtrBottomRowB for bilinear interpolation
-                pWeightParams[0] = _mm_set1_ps(weightParams[0]);
-                pWeightParams[1]  = _mm_set1_ps(weightParams[1]);
-                pDstLoc = pDstLocInit;
-
-                int vectorLoopCount = 0;
-                for (; vectorLoopCount < alignedLength; vectorLoopCount += 4)
-                {
-                    Rpp8u *dstPtrTempChn;
-                    dstPtrTempChn = dstPtrTemp;
-
-                    __m128 pRow[4], pPixels;
-
-                    compute_resize_src_loc_sse(pDstLoc, pWRatio, pWidthLimit, srcLocCF, &pWeightParams[2], pWOffset);
-                    compute_bilinear_coefficients_sse(pWeightParams, pBilinearCoeffs);
-
-                    for (int c = 0; c < dstDescPtr->c; c++)
-                    {
-                        rpp_simd_load(rpp_bilinear_load_u8pln1_to_f32pln1, &srcRowPtrsForInterp[c * 2], srcLocCF, pRow);
-                        compute_bilinear_interpolation_1c_sse(pRow, pBilinearCoeffs, pPixels);
-                        rpp_simd_store(rpp_store4_f32pln1_to_u8pln1, dstPtrTempChn, pPixels);
-                        dstPtrTempChn += dstDescPtr->strides.cStride;
-                    }
-
-                    dstPtrTemp += 4;
-                }
-                for (; vectorLoopCount < dstImgSize[batchCount].width; vectorLoopCount++)
-                {
-                    Rpp8u *dstPtrTempChn;
-                    dstPtrTempChn = dstPtrTemp;
-                    compute_resize_src_loc(vectorLoopCount, wRatio, widthLimit, srcLocationColumnFloor, &weightParams[2], wOffset);
-                    compute_bilinear_coefficients(weightParams, bilinearCoeffs);
-                    for (int c = 0; c < dstDescPtr->c; c++)
-                    {
-                        compute_bilinear_interpolation_1c(&srcRowPtrsForInterp[c * 2], srcLocationColumnFloor, bilinearCoeffs, dstPtrTempChn);
-                        dstPtrTempChn += dstDescPtr->strides.cStride;
-                    }
-
-                    dstPtrTemp++;
-                }
-
-                dstPtrRow += dstDescPtr->strides.hStride;
-            }
-        }
+        ResampleVertical(srcPtrImage, interPtr, srcDescPtr, dstDescPtr, srcImgSize, tempImgSize, rowIndex, rowCoeffs, kernelSize);
+        ResampleHorizontal(interPtr, dstPtrImage, srcDescPtr, dstDescPtr, tempImgSize, dstImgSize[batchCount], colIndex, colCoeffs, kernelSize);
+        free(interPtr);
     }
 
     return RPP_SUCCESS;
