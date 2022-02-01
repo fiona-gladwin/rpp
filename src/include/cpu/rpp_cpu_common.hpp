@@ -4044,16 +4044,17 @@ inline void compute_bilinear_interpolation_1c_sse(__m128 *pSrcPixels, __m128 *pB
 inline void ResampleVertical(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr inputDescPtr, RpptDescPtr outputDescPtr,
                         RpptImagePatch inputImgSize, RpptImagePatch outputImgSize, Rpp32s *index, Rpp32f *coeffs, Rpp32s kernelSize)
 {
-    if (0)
+    // For PLN3 inputs/outputs
+    if (inputDescPtr->c == 3 && inputDescPtr->layout == RpptLayout::NCHW)
     {
         Rpp8u **in_row_ptrs_r = static_cast<Rpp8u **>(malloc(kernelSize * sizeof(Rpp8u *)));
         Rpp8u **in_row_ptrs_g = static_cast<Rpp8u **>(malloc(kernelSize * sizeof(Rpp8u *)));
         Rpp8u **in_row_ptrs_b = static_cast<Rpp8u **>(malloc(kernelSize * sizeof(Rpp8u *)));
         for (int y = 0; y < outputImgSize.height; y++)
         {
-            Rpp8u *out_row_r = outputPtr + y * inputDescPtr->strides.hStride;
-            Rpp8u *out_row_g = out_row_r + inputDescPtr->strides.cStride;
-            Rpp8u *out_row_b = out_row_g + inputDescPtr->strides.cStride;
+            Rpp8u *out_row_r = outputPtr + y * outputDescPtr->strides.hStride;
+            Rpp8u *out_row_g = out_row_r + outputDescPtr->strides.cStride;
+            Rpp8u *out_row_b = out_row_g + outputDescPtr->strides.cStride;
 
             for (int k = 0; k < kernelSize; k++)
             {
@@ -4086,7 +4087,7 @@ inline void ResampleVertical(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr inpu
         Rpp8u **in_row_ptrs = static_cast<Rpp8u **>(malloc(kernelSize * sizeof(Rpp8u *)));
         for (int y = 0; y < outputImgSize.height; y++)
         {
-            Rpp8u *out_row = outputPtr + y * inputDescPtr->strides.hStride;
+            Rpp8u *out_row = outputPtr + y * outputDescPtr->strides.hStride;
 
             for (int k = 0; k < kernelSize; k++)
             {
@@ -4111,6 +4112,7 @@ inline void ResampleVertical(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr inpu
 inline void ResampleHorizontal(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr inputDescPtr, RpptDescPtr outputDescPtr,
                         RpptImagePatch inputImgSize, RpptImagePatch outputImgSize, Rpp32s *index, Rpp32f *coeffs, Rpp32s kernelSize)
 {
+    // For PLN3 or PKD3 inputs/outputs
     if(inputDescPtr->c == 3)
     {
         for (int y = 0; y < outputImgSize.height; y++)

@@ -7493,7 +7493,7 @@ omp_set_dynamic(0);
         Rpp32u widthLimit = roiPtr->xywhROI.roiWidth - 1;
         Rpp32f hOffset = (hRatio - 1) * 0.5f;
         Rpp32f wOffset = (wRatio - 1) * 0.5f;
-        
+
         Rpp32s kernelSize = 2;
         Rpp32s rowIndex[dstImgSize[batchCount].height], colIndex[dstImgSize[batchCount].width];
         Rpp32f rowCoeffs[dstImgSize[batchCount].height * kernelSize], colCoeffs[dstImgSize[batchCount].width * kernelSize];
@@ -7516,12 +7516,22 @@ omp_set_dynamic(0);
         srcImgSize.width = roiPtr->xywhROI.roiWidth;
         srcImgSize.height = roiPtr->xywhROI.roiHeight;
 
+        // The intermediate result from Vertical Resampling will have the src width and dest height
         RpptImagePatch tempImgSize;
         tempImgSize.width = roiPtr->xywhROI.roiWidth;
         tempImgSize.height = dstImgSize[batchCount].height;
 
-        ResampleVertical(srcPtrImage, interPtr, srcDescPtr, dstDescPtr, srcImgSize, tempImgSize, rowIndex, rowCoeffs, kernelSize);
-        ResampleHorizontal(interPtr, dstPtrImage, srcDescPtr, dstDescPtr, tempImgSize, dstImgSize[batchCount], colIndex, colCoeffs, kernelSize);
+        RpptDesc tempDesc;
+        tempDesc = *srcDescPtr;
+        RpptDescPtr tempDescPtr = &tempDesc;
+        tempDescPtr->h = dstDescPtr->h;
+
+        // The channel stride changes with the change in the height for PLN images
+        if(srcDescPtr->layout == RpptLayout::NCHW)
+            tempDescPtr->strides.cStride = srcDescPtr->strides.hStride * dstImgSize[batchCount].height;
+
+        ResampleVertical(srcPtrImage, interPtr, srcDescPtr, tempDescPtr, srcImgSize, tempImgSize, rowIndex, rowCoeffs, kernelSize);
+        ResampleHorizontal(interPtr, dstPtrImage, tempDescPtr, dstDescPtr, tempImgSize, dstImgSize[batchCount], colIndex, colCoeffs, kernelSize);
         free(interPtr);
     }
 
