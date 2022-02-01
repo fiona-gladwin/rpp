@@ -21,7 +21,7 @@ typedef halfhpp Rpp16f;
 #define RPPMAX2(a,b)                    ((a > b) ? a : b)
 #define RPPMAX3(a,b,c)                  ((a > b) && (a > c) ?  a : ((b > c) ? b : c))
 #define RPPINRANGE(a, x, y)             ((a >= x) && (a <= y) ? 1 : 0)
-#define RPPPRANGECHECK(value, a, b)     (value < (Rpp32f) a) ? ((Rpp32f) a) : ((value < (Rpp32f) b) ? value : ((Rpp32f) b))
+#define RPPPRANGECHECK(value, a, b)     (value < a) ? a : ((value < b) ? value : b)
 #define RPPFLOOR(a)                     ((int) a)
 #define RPPCEIL(a)                      ((int) (a + 1.0))
 #define RPPISEVEN(a)                    ((a % 2 == 0) ? 1 : 0)
@@ -4059,8 +4059,7 @@ inline void ResampleVertical(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr inpu
             for (int k = 0; k < kernelSize; k++)
             {
                 int sy = index[y] + k;
-                if (sy < 0) sy = 0;
-                else if (sy > inputImgSize.height - 1) sy = inputImgSize.height - 1;
+                sy = RPPPRANGECHECK(sy, 0, inputImgSize.height - 1);
                 in_row_ptrs_r[k] = inputPtr + sy * inputDescPtr->strides.hStride;
                 in_row_ptrs_g[k] = in_row_ptrs_r[k] + inputDescPtr->strides.cStride;
                 in_row_ptrs_b[k] = in_row_ptrs_g[k] + inputDescPtr->strides.cStride;
@@ -4072,9 +4071,10 @@ inline void ResampleVertical(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr inpu
                 tmpr = tmpg = tmpb = 0;
                 for (int k = 0; k < kernelSize; k++)
                 {
-                    tmpr += ((float)in_row_ptrs_r[k][x] * coeffs[k0 + k]);
-                    tmpg += ((float)in_row_ptrs_g[k][x] * coeffs[k0 + k]);
-                    tmpb += ((float)in_row_ptrs_b[k][x] * coeffs[k0 + k]);
+                    float coefficient = coeffs[k0 + k];
+                    tmpr += ((float)in_row_ptrs_r[k][x] * coefficient);
+                    tmpg += ((float)in_row_ptrs_g[k][x] * coefficient);
+                    tmpb += ((float)in_row_ptrs_b[k][x] * coefficient);
                 }
                 out_row_r[x] = (Rpp8u)tmpr;
                 out_row_g[x] = (Rpp8u)tmpg;
@@ -4088,12 +4088,10 @@ inline void ResampleVertical(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr inpu
         for (int y = 0; y < outputImgSize.height; y++)
         {
             Rpp8u *out_row = outputPtr + y * outputDescPtr->strides.hStride;
-
             for (int k = 0; k < kernelSize; k++)
             {
                 int sy = index[y] + k;
-                if (sy < 0) sy = 0;
-                else if (sy > inputImgSize.height - 1) sy = inputImgSize.height - 1;
+                sy = RPPPRANGECHECK(sy, 0, inputImgSize.height - 1);
                 in_row_ptrs[k] = inputPtr + sy * inputDescPtr->strides.hStride;
             }
             Rpp32s k0 = y * kernelSize;
@@ -4134,15 +4132,16 @@ inline void ResampleHorizontal(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr in
                 for (int k = 0; k < kernelSize; k++)
                 {
                     int srcx = x0 + k;
-                    if (srcx < 0) srcx = 0;
-                    if (srcx > inputImgSize.width - 1) srcx = inputImgSize.width - 1;
-                    sumr += (coeffs[k0 + k] * (float)in_row_r[srcx * inputDescPtr->strides.wStride]);
-                    sumg += (coeffs[k0 + k] * (float)in_row_g[srcx * inputDescPtr->strides.wStride]);
-                    sumb += (coeffs[k0 + k] * (float)in_row_b[srcx * inputDescPtr->strides.wStride]);
+                    srcx = RPPPRANGECHECK(srcx, 0, inputImgSize.width - 1);
+                    int srcxStride = srcx * inputDescPtr->strides.wStride;
+                    sumr += (coeffs[k0 + k] * (float)in_row_r[srcxStride]);
+                    sumg += (coeffs[k0 + k] * (float)in_row_g[srcxStride]);
+                    sumb += (coeffs[k0 + k] * (float)in_row_b[srcxStride]);
                 }
-                out_row_r[x * outputDescPtr->strides.wStride] = (Rpp8u)sumr;
-                out_row_g[x * outputDescPtr->strides.wStride] = (Rpp8u)sumg;
-                out_row_b[x * outputDescPtr->strides.wStride] = (Rpp8u)sumb;
+                int xStride = x * outputDescPtr->strides.wStride;
+                out_row_r[xStride] = (Rpp8u)sumr;
+                out_row_g[xStride] = (Rpp8u)sumg;
+                out_row_b[xStride] = (Rpp8u)sumb;
             }
         }
     }
@@ -4161,8 +4160,7 @@ inline void ResampleHorizontal(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr in
                 for (int k = 0; k < kernelSize; k++)
                 {
                     int srcx = x0 + k;
-                    if (srcx < 0) srcx = 0;
-                    if (srcx > inputImgSize.width - 1) srcx = inputImgSize.width - 1;
+                    srcx = RPPPRANGECHECK(srcx, 0, inputImgSize.width - 1);
                     sum += (coeffs[k0 + k] * (float)in_row[srcx]);
                 }
                 out_row[x] = (Rpp8u)sum;
