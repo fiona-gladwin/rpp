@@ -349,15 +349,15 @@ inline RppStatus rpp_store48_u8pln3_to_u8pkd3(Rpp8u *dstPtr, __m128i *px)
 inline RppStatus rpp_load16_u8_to_f32(Rpp8u *srcPtr, __m128 *p)
 {
     __m128i px[2];
-    __m128i pxZero = _mm_setzero_si128();
+    // __m128i pxZero = _mm_setzero_si128();
 
     px[0] =  _mm_loadu_si128((__m128i *)srcPtr);    /* load pixels 0-15 */
-    px[1] = _mm_unpackhi_epi8(px[0], pxZero);    /* pixels 8-15 */
-    px[0] = _mm_unpacklo_epi8(px[0], pxZero);    /* pixels 0-7 */
-    p[0] = _mm_cvtepi32_ps(_mm_unpacklo_epi16(px[0], pxZero));    /* pixels 0-3 */
-    p[1] = _mm_cvtepi32_ps(_mm_unpackhi_epi16(px[0], pxZero));    /* pixels 4-7 */
-    p[2] = _mm_cvtepi32_ps(_mm_unpacklo_epi16(px[1], pxZero));    /* pixels 8-11 */
-    p[3] = _mm_cvtepi32_ps(_mm_unpackhi_epi16(px[1], pxZero));    /* pixels 12-15 */
+    px[1] = _mm_unpackhi_epi8(px[0], xmm_px0);    /* pixels 8-15 */
+    px[0] = _mm_unpacklo_epi8(px[0], xmm_px0);    /* pixels 0-7 */
+    p[0] = _mm_cvtepi32_ps(_mm_unpacklo_epi16(px[0], xmm_px0));    /* pixels 0-3 */
+    p[1] = _mm_cvtepi32_ps(_mm_unpackhi_epi16(px[0], xmm_px0));    /* pixels 4-7 */
+    p[2] = _mm_cvtepi32_ps(_mm_unpacklo_epi16(px[1], xmm_px0));    /* pixels 8-11 */
+    p[3] = _mm_cvtepi32_ps(_mm_unpackhi_epi16(px[1], xmm_px0));    /* pixels 12-15 */
 
     return RPP_SUCCESS;
 }
