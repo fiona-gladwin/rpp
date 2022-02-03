@@ -4231,17 +4231,25 @@ inline void ResampleHorizontal(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr in
                 }
             }
 
-            rpp_simd_store(rpp_store16_f32_to_u8, tmpOutArrayR, pOutputR);
-            rpp_simd_store(rpp_store16_f32_to_u8, tmpOutArrayG, pOutputG);
-            rpp_simd_store(rpp_store16_f32_to_u8, tmpOutArrayB, pOutputB);
+            __m128 pOutputChannel[12];
+            pOutputChannel[0] = pOutputR[0];
+            pOutputChannel[1] = pOutputR[1];
+            pOutputChannel[2] = pOutputR[2];
+            pOutputChannel[3] = pOutputR[3];
+            pOutputChannel[4] = pOutputG[0];
+            pOutputChannel[5] = pOutputG[1];
+            pOutputChannel[6] = pOutputG[2];
+            pOutputChannel[7] = pOutputG[3];
+            pOutputChannel[8] = pOutputB[0];
+            pOutputChannel[9] = pOutputB[1];
+            pOutputChannel[10] = pOutputB[2];
+            pOutputChannel[11] = pOutputB[3];
 
-            for (int l = 0; l < kNumLanes; l++)
-            {
-                int xStride = (x + l) * outputDescPtr->strides.wStride;
-                out_row_r[xStride] = tmpOutArrayR[l];  // interleave
-                out_row_g[xStride] = tmpOutArrayG[l];  // interleave
-                out_row_b[xStride] = tmpOutArrayB[l];  // interleave
-            }
+            int xStride = x * outputDescPtr->strides.wStride;
+            if(outputDescPtr->layout == RpptLayout::NCHW)
+                rpp_simd_store(rpp_store48_f32pln3_to_u8pln3, out_row_r + xStride, out_row_g + xStride, out_row_b + xStride, pOutputChannel);
+            if(outputDescPtr->layout == RpptLayout::NHWC)
+                rpp_simd_store(rpp_store48_f32pln3_to_u8pkd3, out_row_r + xStride, pOutputChannel);
         }
 #endif
             for (; x < outputImgSize.width; x++)
@@ -4307,9 +4315,7 @@ inline void ResampleHorizontal(Rpp8u *inputPtr, Rpp8u *outputPtr, RpptDescPtr in
                         pOutput[v] = _mm_add_ps(pOutput[v], _mm_mul_ps(pCoeffs[v], pInput[v]));
                 }
 
-                rpp_simd_store(rpp_store16_f32_to_u8, tmpOutArray, pOutput);
-                for (int l = 0; l < kNumLanes; l++)
-                    out_row[x + l] = tmpOutArray[l];  // interleave
+                rpp_simd_store(rpp_store16_f32_to_u8, out_row + x, pOutput);
             }
 #endif
             for (; x < bufferLength; x++)
