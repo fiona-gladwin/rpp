@@ -7505,12 +7505,13 @@ omp_set_dynamic(0);
         for(int indexCount = 0, coeffCount = 0; indexCount < dstImgSize[batchCount].width; indexCount++, coeffCount += 2)
             compute_resize_src_loc(indexCount, wRatio, widthLimit, colIndex[indexCount], &colCoeffs[coeffCount], wOffset);
 
-        Rpp8u *srcPtrImage, *dstPtrImage, *interPtr;
+        Rpp8u *srcPtrImage, *dstPtrImage;
+        float *interPtr;
         srcPtrImage = srcPtr + batchCount * srcDescPtr->strides.nStride;
         dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
         srcPtrImage = srcPtrImage + (roiPtr->xywhROI.xy.y * srcDescPtr->strides.hStride) + (roiPtr->xywhROI.xy.x * srcLayoutParams.bufferMultiplier);
 
-        interPtr = (Rpp8u *)malloc(srcDescPtr->strides.hStride * dstImgSize[batchCount].height * srcDescPtr->c * sizeof(Rpp8u));
+        interPtr = (float *)malloc(srcDescPtr->strides.hStride * dstImgSize[batchCount].height * srcDescPtr->c * sizeof(float));
 
         RpptImagePatch srcImgSize;
         srcImgSize.width = roiPtr->xywhROI.roiWidth;
