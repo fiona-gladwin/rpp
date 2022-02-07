@@ -4138,7 +4138,7 @@ inline void ResampleVertical(Rpp8u *inputPtr, float *outputPtr, RpptDescPtr inpu
     }
     else
     {
-        Rpp8u **in_row_ptrs = static_cast<Rpp8u **>(malloc(kernelSize * sizeof(Rpp8u *)));
+        Rpp8u *in_row_ptrs[kernelSize];
         for (int y = 0; y < outputImgSize.height; y++)
         {
             float *out_row = outputPtr + y * outputDescPtr->strides.hStride;
@@ -4164,7 +4164,7 @@ inline void ResampleVertical(Rpp8u *inputPtr, float *outputPtr, RpptDescPtr inpu
                     rpp_simd_load(rpp_load16_u8_to_f32, in_row_ptrs[k] + x, pInput);
                     __m128 coeff = _mm_set1_ps(coeffs[k0 + k]);
                     for (int v = 0; v < kNumVecs; v++)
-                        pTemp[v] = _mm_add_ps(pTemp[v], _mm_mul_ps(coeff, pInput[v]));
+                        pTemp[v] = _mm_fmadd_ps(pInput[v], coeff, pTemp[v]);
                 }
                 rpp_simd_store(rpp_store4_f32_to_f32, out_row + x, pTemp);
                 rpp_simd_store(rpp_store4_f32_to_f32, out_row + x + 4, pTemp + 1);
@@ -4326,23 +4326,25 @@ inline void ResampleHorizontal(float *inputPtr, Rpp8u *outputPtr, RpptDescPtr in
                     float tmpCoeffs[kNumLanes];
 
                     for (int l = 0; l < kNumLanes; l++)
+                        tmpCoeffs[l] = coeffs[(x + l) * kernelSize + k];  // interleave per-column coefficients
+                    pCoeffs[0] = _mm_load_ps(tmpCoeffs);
+                    pCoeffs[1] = _mm_load_ps(tmpCoeffs + 4);
+                    pCoeffs[2] = _mm_load_ps(tmpCoeffs + 8);
+                    pCoeffs[3] = _mm_load_ps(tmpCoeffs + 12);
+
+                    for (int l = 0; l < kNumLanes; l++)
                     {
                         int srcx = index[x + l] + k;
                         srcx = RPPPRANGECHECK(srcx, 0, inputImgSize.width - 1);
-                        tmpCoeffs[l] = coeffs[(x + l) * kernelSize + k];  // interleave per-column coefficients
                         tmpInArray[l] = in_row[srcx];
                     }
                     rpp_simd_load(rpp_load4_f32_to_f32, tmpInArray, pInput);
                     rpp_simd_load(rpp_load4_f32_to_f32, tmpInArray + 4, pInput + 1);
                     rpp_simd_load(rpp_load4_f32_to_f32, tmpInArray + 8, pInput + 2);
                     rpp_simd_load(rpp_load4_f32_to_f32, tmpInArray + 12, pInput + 3);
-                    pCoeffs[0] = _mm_load_ps(tmpCoeffs);
-                    pCoeffs[1] = _mm_load_ps(tmpCoeffs + 4);
-                    pCoeffs[2] = _mm_load_ps(tmpCoeffs + 8);
-                    pCoeffs[3] = _mm_load_ps(tmpCoeffs + 12);
 
                     for (int v = 0; v < kNumVecs; v++)
-                        pOutput[v] = _mm_add_ps(pOutput[v], _mm_mul_ps(pCoeffs[v], pInput[v]));
+                        pOutput[v] = _mm_fmadd_ps(pCoeffs[v], pInput[v], pOutput[v]);
                 }
 
                 rpp_simd_store(rpp_store16_f32_to_u8, out_row + x, pOutput);
