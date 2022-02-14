@@ -4046,7 +4046,7 @@ inline void set_zeros(__m128 *pVecs, Rpp32s numVecs)
         pVecs[i] = xmm_p0;
 }
 
-inline void ResampleVertical(Rpp8u *inputPtr, float *outputPtr, RpptDescPtr inputDescPtr, RpptDescPtr outputDescPtr,
+inline void resample_vertical(Rpp8u *inputPtr, float *outputPtr, RpptDescPtr inputDescPtr, RpptDescPtr outputDescPtr,
                         RpptImagePatch inputImgSize, RpptImagePatch outputImgSize, Rpp32s *index, Rpp32f *coeffs, Rpp32s kernelSize)
 {
 
@@ -4097,9 +4097,9 @@ inline void ResampleVertical(Rpp8u *inputPtr, float *outputPtr, RpptDescPtr inpu
                     __m128 coeff = _mm_set1_ps(coeffs[k0 + k]);
                     for (int v = 0; v < kNumVecs; v++)
                     {
-                        pTempR[v] = _mm_add_ps(pTempR[v], _mm_mul_ps(coeff, pInputR[v]));
-                        pTempG[v] = _mm_add_ps(pTempG[v], _mm_mul_ps(coeff, pInputG[v]));
-                        pTempB[v] = _mm_add_ps(pTempB[v], _mm_mul_ps(coeff, pInputB[v]));
+                        pTempR[v] = _mm_fmadd_ps(coeff, pInputR[v], pTempR[v]);
+                        pTempG[v] = _mm_fmadd_ps(coeff, pInputG[v], pTempG[v]);
+                        pTempB[v] = _mm_fmadd_ps(coeff, pInputB[v], pTempB[v]);
                     }
                 }
 
@@ -4184,7 +4184,7 @@ inline void ResampleVertical(Rpp8u *inputPtr, float *outputPtr, RpptDescPtr inpu
     }
 }
 
-inline void ResampleHorizontal(float *inputPtr, Rpp8u *outputPtr, RpptDescPtr inputDescPtr, RpptDescPtr outputDescPtr,
+inline void resample_horizontal(float *inputPtr, Rpp8u *outputPtr, RpptDescPtr inputDescPtr, RpptDescPtr outputDescPtr,
                         RpptImagePatch inputImgSize, RpptImagePatch outputImgSize, Rpp32s *index, Rpp32f *coeffs, Rpp32s kernelSize)
 {
     static constexpr int kVecSize = 16;
@@ -4212,65 +4212,47 @@ inline void ResampleHorizontal(float *inputPtr, Rpp8u *outputPtr, RpptDescPtr in
             float tmpInArrayR[kNumLanes], tmpInArrayG[kNumLanes], tmpInArrayB[kNumLanes];
             Rpp8u tmpOutArrayR[kNumLanes], tmpOutArrayG[kNumLanes], tmpOutArrayB[kNumLanes];
 
-            __m128 pOutputR[kNumVecs], pOutputG[kNumVecs], pOutputB[kNumVecs], pCoeffs[kNumVecs];
-            set_zeros(pOutputR, kNumVecs);
-            set_zeros(pOutputG, kNumVecs);
-            set_zeros(pOutputB, kNumVecs);
 
+            __m128 pOutputChannel[12];
+            set_zeros(pOutputChannel, kNumVecs * 3);
             for (int k = 0; k < kernelSize; k++)
             {
                 __m128 pInputR[kNumVecs], pInputG[kNumVecs], pInputB[kNumVecs];
                 float tmpCoeffs[kNumLanes];
+
+                for (int l = 0; l < kNumLanes; l++)
+                    tmpCoeffs[l] = coeffs[(x + l) * kernelSize + k];  // interleave per-column coefficients
+
+                __m128 pCoeffs[kNumVecs];
+                pCoeffs[0] = _mm_load_ps(tmpCoeffs);
+                pCoeffs[1] = _mm_load_ps(tmpCoeffs + 4);
+                pCoeffs[2] = _mm_load_ps(tmpCoeffs + 8);
+                pCoeffs[3] = _mm_load_ps(tmpCoeffs + 12);
+
                 for (int l = 0; l < kNumLanes; l++)
                 {
                     int srcx = index[x + l] + k;
                     srcx = RPPPRANGECHECK(srcx, 0, inputImgSize.width - 1);
                     int srcxStride = srcx * inputDescPtr->strides.wStride;
-                    tmpCoeffs[l] = coeffs[(x + l) * kernelSize + k];  // interleave per-column coefficients
                     tmpInArrayR[l] = in_row_r[srcxStride];
                     tmpInArrayG[l] = in_row_g[srcxStride];
                     tmpInArrayB[l] = in_row_b[srcxStride];
                 }
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayR, pInputR);
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayR + 4, pInputR + 1);
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayR + 8, pInputR + 2);
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayR + 12, pInputR + 3);
 
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayG, pInputG);
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayG + 4, pInputG + 1);
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayG + 8, pInputG + 2);
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayG + 12, pInputG + 3);
-
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayB, pInputB);
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayB + 4, pInputB + 1);
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayB + 8, pInputB + 2);
-                rpp_simd_load(rpp_load4_f32_to_f32, tmpInArrayB + 12, pInputB + 3);
-
-                pCoeffs[0] = _mm_load_ps(tmpCoeffs);
-                pCoeffs[1] = _mm_load_ps(tmpCoeffs + 4);
-                pCoeffs[2] = _mm_load_ps(tmpCoeffs + 8);
-                pCoeffs[3] = _mm_load_ps(tmpCoeffs + 12);
-                for (int v = 0; v < kNumVecs; v++)
+                __m128 *pOutputR = &pOutputChannel[0];
+                __m128 *pOutputG = &pOutputChannel[4];
+                __m128 *pOutputB = &pOutputChannel[8];
+                for (int v = 0, v4 = 0; v < kNumVecs; v++, v4 += 4)
                 {
-                    pOutputR[v] = _mm_add_ps(pOutputR[v], _mm_mul_ps(pCoeffs[v], pInputR[v]));
-                    pOutputG[v] = _mm_add_ps(pOutputG[v], _mm_mul_ps(pCoeffs[v], pInputG[v]));
-                    pOutputB[v] = _mm_add_ps(pOutputB[v], _mm_mul_ps(pCoeffs[v], pInputB[v]));
+                    rpp_simd_load(rpp_load4_f32_to_f32, &tmpInArrayR[v4], &pInputR[v]);
+                    rpp_simd_load(rpp_load4_f32_to_f32, &tmpInArrayG[v4], &pInputG[v]);
+                    rpp_simd_load(rpp_load4_f32_to_f32, &tmpInArrayB[v4], &pInputB[v]);
+
+                    pOutputR[v] = _mm_fmadd_ps(pCoeffs[v], pInputR[v], pOutputR[v]);
+                    pOutputG[v] = _mm_fmadd_ps(pCoeffs[v], pInputG[v], pOutputG[v]);
+                    pOutputB[v] = _mm_fmadd_ps(pCoeffs[v], pInputB[v], pOutputB[v]);
                 }
             }
-
-            __m128 pOutputChannel[12];
-            pOutputChannel[0] = pOutputR[0];
-            pOutputChannel[1] = pOutputR[1];
-            pOutputChannel[2] = pOutputR[2];
-            pOutputChannel[3] = pOutputR[3];
-            pOutputChannel[4] = pOutputG[0];
-            pOutputChannel[5] = pOutputG[1];
-            pOutputChannel[6] = pOutputG[2];
-            pOutputChannel[7] = pOutputG[3];
-            pOutputChannel[8] = pOutputB[0];
-            pOutputChannel[9] = pOutputB[1];
-            pOutputChannel[10] = pOutputB[2];
-            pOutputChannel[11] = pOutputB[3];
 
             int xStride = x * outputDescPtr->strides.wStride;
             if(outputDescPtr->layout == RpptLayout::NCHW)

@@ -7531,8 +7531,8 @@ omp_set_dynamic(0);
         if(srcDescPtr->layout == RpptLayout::NCHW)
             tempDescPtr->strides.cStride = srcDescPtr->strides.hStride * dstImgSize[batchCount].height;
 
-        ResampleVertical(srcPtrImage, interPtr, srcDescPtr, tempDescPtr, srcImgSize, tempImgSize, rowIndex, rowCoeffs, kernelSize);
-        ResampleHorizontal(interPtr, dstPtrImage, tempDescPtr, dstDescPtr, tempImgSize, dstImgSize[batchCount], colIndex, colCoeffs, kernelSize);
+        resample_vertical(srcPtrImage, interPtr, srcDescPtr, tempDescPtr, srcImgSize, tempImgSize, rowIndex, rowCoeffs, kernelSize);
+        resample_horizontal(interPtr, dstPtrImage, tempDescPtr, dstDescPtr, tempImgSize, dstImgSize[batchCount], colIndex, colCoeffs, kernelSize);
         free(interPtr);
     }
 
