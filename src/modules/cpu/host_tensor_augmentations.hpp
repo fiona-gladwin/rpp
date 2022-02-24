@@ -7491,19 +7491,27 @@ omp_set_dynamic(0);
         Rpp32f hRatio = ((Rpp32f)(roiPtr->xywhROI.roiHeight)) / ((Rpp32f)(dstImgSize[batchCount].height));
         Rpp32u heightLimit = roiPtr->xywhROI.roiHeight - 1;
         Rpp32u widthLimit = roiPtr->xywhROI.roiWidth - 1;
-        Rpp32f hOffset = (hRatio - 1) * 0.5f;
-        Rpp32f wOffset = (wRatio - 1) * 0.5f;
+        Rpp32s hKernelSize = std::ceil((hRatio < 1 ? 1 : hRatio) * 2);
+        Rpp32s wKernelSize = std::ceil((wRatio < 1 ? 1 : wRatio) * 2);
+        hKernelSize = wKernelSize = 6;
+        Rpp32f hOffset = (hRatio - 1) * 0.5f - (hKernelSize / 2);
+        Rpp32f wOffset = (wRatio - 1) * 0.5f - (wKernelSize / 2);
 
-        Rpp32s kernelSize = 2;
         Rpp32s rowIndex[dstImgSize[batchCount].height], colIndex[dstImgSize[batchCount].width];
-        Rpp32f rowCoeffs[dstImgSize[batchCount].height * kernelSize], colCoeffs[dstImgSize[batchCount].width * kernelSize];
+        Rpp32f rowCoeffs[dstImgSize[batchCount].height * hKernelSize], colCoeffs[dstImgSize[batchCount].width * wKernelSize];
+        Rpp32f weightParams[2];
 
         // Compute row index and coefficients
-        for(int indexCount = 0, coeffCount = 0; indexCount < dstImgSize[batchCount].height; indexCount++, coeffCount += 2)
-            compute_resize_src_loc(indexCount, hRatio, heightLimit, rowIndex[indexCount], &rowCoeffs[coeffCount], hOffset);
-        // Compute col index and coefficients
-        for(int indexCount = 0, coeffCount = 0; indexCount < dstImgSize[batchCount].width; indexCount++, coeffCount += 2)
-            compute_resize_src_loc(indexCount, wRatio, widthLimit, colIndex[indexCount], &colCoeffs[coeffCount], wOffset);
+        for(int indexCount = 0, coeffCount = 0; indexCount < dstImgSize[batchCount].height; indexCount++, coeffCount += hKernelSize)
+        {
+            compute_resize_src_loc(indexCount, hRatio, heightLimit, rowIndex[indexCount], &weightParams[0], hOffset);
+            compute_index_and_weights(rowIndex[indexCount], weightParams[0], hKernelSize, heightLimit, &rowCoeffs[coeffCount]);
+        }        // Compute col index and coefficients
+        for(int indexCount = 0, coeffCount = 0; indexCount < dstImgSize[batchCount].width; indexCount++, coeffCount += wKernelSize)
+        {
+            compute_resize_src_loc(indexCount, wRatio, widthLimit, colIndex[indexCount], &weightParams[0], wOffset);
+            compute_index_and_weights(colIndex[indexCount], weightParams[0], wKernelSize, widthLimit, &colCoeffs[coeffCount], srcDescPtr->strides.wStride);
+        }
 
         Rpp8u *srcPtrImage, *dstPtrImage;
         float *interPtr;
@@ -7531,8 +7539,8 @@ omp_set_dynamic(0);
         if(srcDescPtr->layout == RpptLayout::NCHW)
             tempDescPtr->strides.cStride = srcDescPtr->strides.hStride * dstImgSize[batchCount].height;
 
-        resample_vertical(srcPtrImage, interPtr, srcDescPtr, tempDescPtr, srcImgSize, tempImgSize, rowIndex, rowCoeffs, kernelSize);
-        resample_horizontal(interPtr, dstPtrImage, tempDescPtr, dstDescPtr, tempImgSize, dstImgSize[batchCount], colIndex, colCoeffs, kernelSize);
+        resample_vertical(srcPtrImage, interPtr, srcDescPtr, tempDescPtr, srcImgSize, tempImgSize, rowIndex, rowCoeffs, wKernelSize);
+        resample_horizontal(interPtr, dstPtrImage, tempDescPtr, dstDescPtr, tempImgSize, dstImgSize[batchCount], colIndex, colCoeffs, hKernelSize);
         free(interPtr);
     }
 

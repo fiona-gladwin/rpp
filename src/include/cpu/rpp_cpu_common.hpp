@@ -31,6 +31,11 @@ typedef halfhpp Rpp16f;
 #define RPPISGREATER(pixel, value)      ((pixel > value) ? 1 : 0)
 #define RPPISLESSER(pixel, value)       ((pixel < value) ? 1 : 0)
 
+/*Constants used for Gaussian interpolation*/
+// Here sigma is considered as 0.5f
+#define GAUSSCONSTANT1                 -2.0f          // 1 / (sigma * sigma * -1 * 2);
+#define GAUSSCONSTANT2                  0.7978845608028654f // 1 / ((2 * PI)*(1/2) * sigma)
+
 static uint16_t wyhash16_x;
 
 alignas(64) const Rpp32f sch_mat[16] = {0.701f, -0.299f, -0.300f, 0.0f, -0.587f, 0.413f, -0.588f, 0.0f, -0.114f, -0.114f, 0.886f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
@@ -3967,9 +3972,9 @@ inline void compute_resize_src_loc(Rpp32s dstLocation, Rpp32f scale, Rpp32u limi
 {
     Rpp32f srcLocation = ((Rpp32f) dstLocation) * scale + offset;
     Rpp32s srcLocationFloor = (Rpp32s) RPPFLOOR(srcLocation);
-    weight[1] = srcLocation - srcLocationFloor;
-    weight[0] = 1 - weight[1];
-    srcLoc = ((srcLocationFloor > limit) ? limit : srcLocationFloor) * srcStride;
+    weight[0] = srcLocation - srcLocationFloor;
+    // weight[0] = 1 - weight[1];
+    srcLoc = srcLocationFloor * srcStride;
 }
 
 inline void compute_resize_src_loc_sse(__m128 &pDstLoc, __m128 &pScale, __m128 &pLimit, Rpp32s *srcLoc, __m128 *pWeight, __m128 pOffset = xmm_p0, bool hasRGBChannels = false)
@@ -4046,140 +4051,110 @@ inline void set_zeros(__m128 *pVecs, Rpp32s numVecs)
         pVecs[i] = xmm_p0;
 }
 
+inline void set_zeros_avx(__m256 *pVecs, Rpp32s numVecs)
+{
+    for(int i = 0; i < numVecs; i++)
+        pVecs[i] = avx_p0;
+}
+
+inline void compute_gaussian_coefficient(Rpp32f weightParam, Rpp32f &gaussianCoeff)
+{
+    gaussianCoeff = expf(weightParam * weightParam * GAUSSCONSTANT1) * GAUSSCONSTANT2;
+}
+
+inline void compute_triangular_coefficient(Rpp32f weight, Rpp32f &coeff)
+{
+    coeff = 1 - std::fabs(weight);
+    coeff = coeff < 0 ? 0 : coeff;
+}
+
+inline Rpp32f sinc(Rpp32f x)
+{
+    x *= PI;
+    if (std::abs(x) < 1e-5f)
+        return 1.0f - x * x * 0.1666666f;  // remove singularity by using Taylor expansion
+    return std::sin(x) / x;
+}
+
+inline void compute_lanczos3_coefficient(Rpp32f weight, Rpp32f &coeff)
+{
+    coeff = fabs(weight) >= 3 ? 0.0f : (sinc(weight)*sinc(weight / 3));
+}
+
+inline void compute_index_and_weights(Rpp32s loc, Rpp32f weight, Rpp32s kernelSize, Rpp32s limit, Rpp32f *coeffs, Rpp32u srcStride = 1)
+{
+    Rpp32f kernelSize2 = kernelSize / 2;
+    Rpp32f kernelSize2Channel = kernelSize2 * srcStride;
+    limit = limit * srcStride;
+    Rpp32f sum = 0;
+
+    for(int k = 0; k < kernelSize; k++)
+    {
+        compute_lanczos3_coefficient(std::fabs(weight - k), coeffs[k]);
+        sum += coeffs[k];
+    }
+    if(sum)
+    {
+        sum = 1 / sum;
+        for(int k = 0; k < kernelSize; k++)
+            coeffs[k] = coeffs[k] * sum;
+    }
+}
+
 inline void resample_vertical(Rpp8u *inputPtr, float *outputPtr, RpptDescPtr inputDescPtr, RpptDescPtr outputDescPtr,
                         RpptImagePatch inputImgSize, RpptImagePatch outputImgSize, Rpp32s *index, Rpp32f *coeffs, Rpp32s kernelSize)
 {
 
-    static constexpr int kVecSize = 16;
+    static constexpr int kVecSize = 32;
     static constexpr int load_lanes = kVecSize / sizeof(Rpp8u);
     static constexpr int store_lanes = kVecSize / sizeof(float);
     static constexpr int kNumLanes = load_lanes > store_lanes ? load_lanes : store_lanes;
     static constexpr int kNumVecs = kNumLanes * sizeof(float) / kVecSize;
 
-    // For PLN3 inputs/outputs
-    if (inputDescPtr->c == 3 && inputDescPtr->layout == RpptLayout::NCHW)
+    Rpp8u *in_row_ptrs[kernelSize];
+    for (int y = 0; y < outputImgSize.height; y++)
     {
-        Rpp8u **in_row_ptrs_r = static_cast<Rpp8u **>(malloc(kernelSize * sizeof(Rpp8u *)));
-        Rpp8u **in_row_ptrs_g = static_cast<Rpp8u **>(malloc(kernelSize * sizeof(Rpp8u *)));
-        Rpp8u **in_row_ptrs_b = static_cast<Rpp8u **>(malloc(kernelSize * sizeof(Rpp8u *)));
-        for (int y = 0; y < outputImgSize.height; y++)
+        float *out_row = outputPtr + y * outputDescPtr->strides.hStride;
+        for (int k = 0; k < kernelSize; k++)
         {
-            float *out_row_r = outputPtr + y * outputDescPtr->strides.hStride;
-            float *out_row_g = out_row_r + outputDescPtr->strides.cStride;
-            float *out_row_b = out_row_g + outputDescPtr->strides.cStride;
-
-            for (int k = 0; k < kernelSize; k++)
-            {
-                int sy = index[y] + k;
-                sy = RPPPRANGECHECK(sy, 0, inputImgSize.height - 1);
-                in_row_ptrs_r[k] = inputPtr + sy * inputDescPtr->strides.hStride;
-                in_row_ptrs_g[k] = in_row_ptrs_r[k] + inputDescPtr->strides.cStride;
-                in_row_ptrs_b[k] = in_row_ptrs_g[k] + inputDescPtr->strides.cStride;
-            }
-            Rpp32s k0 = y * kernelSize;
-            Rpp32s bufferLength = inputImgSize.width;
-            Rpp32s alignedLength = bufferLength &~ (kNumLanes-1);
-            int x = 0;
-#ifdef __SSE2__
-            for (; x + kNumLanes <= alignedLength; x += kNumLanes)
-            {
-                __m128 pTempR[kNumVecs], pTempG[kNumVecs], pTempB[kNumVecs];
-                set_zeros(pTempR, kNumVecs);
-                set_zeros(pTempG, kNumVecs);
-                set_zeros(pTempB, kNumVecs);
-
-                for (int k = 0; k < kernelSize; k++)
-                {
-                    __m128 pInputR[kNumVecs], pInputG[kNumVecs], pInputB[kNumVecs];
-                    rpp_simd_load(rpp_load16_u8_to_f32, in_row_ptrs_r[k] + x, pInputR);
-                    rpp_simd_load(rpp_load16_u8_to_f32, in_row_ptrs_g[k] + x, pInputG);
-                    rpp_simd_load(rpp_load16_u8_to_f32, in_row_ptrs_b[k] + x, pInputB);
-                    __m128 coeff = _mm_set1_ps(coeffs[k0 + k]);
-                    for (int v = 0; v < kNumVecs; v++)
-                    {
-                        pTempR[v] = _mm_fmadd_ps(coeff, pInputR[v], pTempR[v]);
-                        pTempG[v] = _mm_fmadd_ps(coeff, pInputG[v], pTempG[v]);
-                        pTempB[v] = _mm_fmadd_ps(coeff, pInputB[v], pTempB[v]);
-                    }
-                }
-
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_r + x, pTempR);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_r + x + 4, pTempR + 1);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_r + x + 8, pTempR + 2);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_r + x + 12, pTempR + 3);
-
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_g + x, pTempG);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_g + x + 4, pTempG + 1);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_g + x + 8, pTempG + 2);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_g + x + 12, pTempG + 3);
-
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_b + x, pTempB);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_b + x + 4, pTempB + 1);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_b + x + 8, pTempB + 2);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row_b + x + 12, pTempB + 3);
-            }
-#endif
-            for (; x < inputImgSize.width; x++)
-            {
-                float tmpr, tmpg, tmpb;
-                tmpr = tmpg = tmpb = 0;
-                for (int k = 0; k < kernelSize; k++)
-                {
-                    float coefficient = coeffs[k0 + k];
-                    tmpr += (in_row_ptrs_r[k][x] * coefficient);
-                    tmpg += (in_row_ptrs_g[k][x] * coefficient);
-                    tmpb += (in_row_ptrs_b[k][x] * coefficient);
-                }
-                out_row_r[x] = tmpr;
-                out_row_g[x] = tmpg;
-                out_row_b[x] = tmpb;
-            }
+            int sy = index[y] + k;
+            sy = RPPPRANGECHECK(sy, 0, inputImgSize.height - 1);
+            in_row_ptrs[k] = inputPtr + sy * inputDescPtr->strides.hStride;
         }
-    }
-    else
-    {
-        Rpp8u *in_row_ptrs[kernelSize];
-        for (int y = 0; y < outputImgSize.height; y++)
+        Rpp32s k0 = y * kernelSize;
+        Rpp32s bufferLength = inputImgSize.width * inputDescPtr->strides.wStride;
+        Rpp32s alignedLength = bufferLength &~ (kNumLanes-1);
+
+        __m256 pCoeff[kernelSize];
+        for (int k = 0; k < kernelSize; k++)
+            pCoeff[k] = _mm256_set1_ps(coeffs[k0 + k]);
+
+        int x = 0;
+        for (; x + kNumLanes <= alignedLength; x += kNumLanes)
         {
-            float *out_row = outputPtr + y * outputDescPtr->strides.hStride;
+            __m256 pTemp[kNumVecs];
+            set_zeros_avx(pTemp, kNumVecs);
+
             for (int k = 0; k < kernelSize; k++)
             {
-                int sy = index[y] + k;
-                sy = RPPPRANGECHECK(sy, 0, inputImgSize.height - 1);
-                in_row_ptrs[k] = inputPtr + sy * inputDescPtr->strides.hStride;
+                __m256 pInput[kNumVecs];
+                rpp_simd_load(rpp_load32_u8_to_f32_avx, in_row_ptrs[k] + x, pInput);
+                for (int v = 0; v < kNumVecs; v++)
+                    pTemp[v] = _mm256_fmadd_ps(pInput[v], pCoeff[k], pTemp[v]);
             }
-            Rpp32s k0 = y * kernelSize;
-            Rpp32s bufferLength = inputImgSize.width * inputDescPtr->strides.wStride;
-            Rpp32s alignedLength = bufferLength &~ (kNumLanes-1);
-            int x = 0;
-#ifdef __SSE2__
-            for (; x + kNumLanes <= alignedLength; x += kNumLanes)
-            {
-                __m128 pTemp[kNumVecs];
-                set_zeros(pTemp, kNumVecs);
+            float *temp_out_row = out_row + x;
+            rpp_simd_store(rpp_store8_f32_to_f32_avx, &temp_out_row[0], &pTemp[0]);
+            rpp_simd_store(rpp_store8_f32_to_f32_avx, &temp_out_row[8], &pTemp[1]);
+            rpp_simd_store(rpp_store8_f32_to_f32_avx, &temp_out_row[16], &pTemp[2]);
+            rpp_simd_store(rpp_store8_f32_to_f32_avx, &temp_out_row[24], &pTemp[3]);
+        }
 
-                for (int k = 0; k < kernelSize; k++)
-                {
-                    __m128 pInput[kNumVecs];
-                    rpp_simd_load(rpp_load16_u8_to_f32, in_row_ptrs[k] + x, pInput);
-                    __m128 coeff = _mm_set1_ps(coeffs[k0 + k]);
-                    for (int v = 0; v < kNumVecs; v++)
-                        pTemp[v] = _mm_fmadd_ps(pInput[v], coeff, pTemp[v]);
-                }
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row + x, pTemp);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row + x + 4, pTemp + 1);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row + x + 8, pTemp + 2);
-                rpp_simd_store(rpp_store4_f32_to_f32, out_row + x + 12, pTemp + 3);
-            }
-#endif
-
-            for (; x < bufferLength; x++)
-            {
-                float tmp = 0;
-                for (int k = 0; k < kernelSize; k++)
-                    tmp += (in_row_ptrs[k][x] * coeffs[k0 + k]);
-                out_row[x] = tmp;
-            }
+        for (; x < bufferLength; x++)
+        {
+            float tmp = 0;
+            for (int k = 0; k < kernelSize; k++)
+                tmp += (in_row_ptrs[k][x] * coeffs[k0 + k]);
+            out_row[x] = tmp;
         }
     }
 }
@@ -4187,164 +4162,67 @@ inline void resample_vertical(Rpp8u *inputPtr, float *outputPtr, RpptDescPtr inp
 inline void resample_horizontal(float *inputPtr, Rpp8u *outputPtr, RpptDescPtr inputDescPtr, RpptDescPtr outputDescPtr,
                         RpptImagePatch inputImgSize, RpptImagePatch outputImgSize, Rpp32s *index, Rpp32f *coeffs, Rpp32s kernelSize)
 {
-    static constexpr int kVecSize = 16;
+    static constexpr int kVecSize = 32;
     static constexpr int kNumLanes = kVecSize / sizeof(Rpp8u);
     static constexpr int kNumVecs = kNumLanes * sizeof(float) / kVecSize;
     // For PLN3 or PKD3 inputs/outputs
-    if(inputDescPtr->c == 3)
+    for (int y = 0; y < outputImgSize.height; y++)
     {
-        for (int y = 0; y < outputImgSize.height; y++)
-        {
-            Rpp8u *out_row_r = outputPtr + y * outputDescPtr->strides.hStride;
-            Rpp8u *out_row_g = out_row_r + outputDescPtr->strides.cStride;
-            Rpp8u *out_row_b = out_row_g + outputDescPtr->strides.cStride;
+        Rpp8u *out_row = outputPtr + y * outputDescPtr->strides.hStride;
+        float *in_row = inputPtr + y * inputDescPtr->strides.hStride;
+        Rpp32s bufferLength = outputImgSize.width;
+        Rpp32s alignedLength = bufferLength &~ (kNumLanes-1);
 
-            float *in_row_r = inputPtr + y * inputDescPtr->strides.hStride;
-            float *in_row_g = in_row_r + inputDescPtr->strides.cStride;
-            float *in_row_b = in_row_g + inputDescPtr->strides.cStride;
-            Rpp32s bufferLength = outputImgSize.width;
-            Rpp32s alignedLength = bufferLength &~ (kNumLanes-1);
-
-            int x = 0;
-#ifdef __SSE2__
+        int x = 0;
         for (; x + kNumLanes <= alignedLength; x += kNumLanes)
         {
-            float tmpInArrayR[kNumLanes], tmpInArrayG[kNumLanes], tmpInArrayB[kNumLanes];
-            Rpp8u tmpOutArrayR[kNumLanes], tmpOutArrayG[kNumLanes], tmpOutArrayB[kNumLanes];
+            float tmpInArray[kNumLanes];
+            Rpp8u tmpOutArray[kNumLanes];
 
+            __m256 pOutput[kNumVecs], pCoeffs[kNumVecs];
+            set_zeros_avx(pOutput, kNumVecs);
 
-            __m128 pOutputChannel[12];
-            set_zeros(pOutputChannel, kNumVecs * 3);
             for (int k = 0; k < kernelSize; k++)
             {
-                __m128 pInputR[kNumVecs], pInputG[kNumVecs], pInputB[kNumVecs];
+                __m256 pInput[kNumVecs];
                 float tmpCoeffs[kNumLanes];
 
                 for (int l = 0; l < kNumLanes; l++)
                     tmpCoeffs[l] = coeffs[(x + l) * kernelSize + k];  // interleave per-column coefficients
-
-                __m128 pCoeffs[kNumVecs];
-                pCoeffs[0] = _mm_load_ps(tmpCoeffs);
-                pCoeffs[1] = _mm_load_ps(tmpCoeffs + 4);
-                pCoeffs[2] = _mm_load_ps(tmpCoeffs + 8);
-                pCoeffs[3] = _mm_load_ps(tmpCoeffs + 12);
+                pCoeffs[0] = _mm256_loadu_ps(&tmpCoeffs[0]);
+                pCoeffs[1] = _mm256_loadu_ps(&tmpCoeffs[8]);
+                pCoeffs[2] = _mm256_loadu_ps(&tmpCoeffs[16]);
+                pCoeffs[3] = _mm256_loadu_ps(&tmpCoeffs[24]);
 
                 for (int l = 0; l < kNumLanes; l++)
                 {
                     int srcx = index[x + l] + k;
                     srcx = RPPPRANGECHECK(srcx, 0, inputImgSize.width - 1);
-                    int srcxStride = srcx * inputDescPtr->strides.wStride;
-                    tmpInArrayR[l] = in_row_r[srcxStride];
-                    tmpInArrayG[l] = in_row_g[srcxStride];
-                    tmpInArrayB[l] = in_row_b[srcxStride];
+                    tmpInArray[l] = in_row[srcx];
                 }
+                rpp_simd_load(rpp_load8_f32_to_f32_avx, &tmpInArray[0], &pInput[0]);
+                rpp_simd_load(rpp_load8_f32_to_f32_avx, &tmpInArray[8], &pInput[1]);
+                rpp_simd_load(rpp_load8_f32_to_f32_avx, &tmpInArray[16], &pInput[2]);
+                rpp_simd_load(rpp_load8_f32_to_f32_avx, &tmpInArray[24], &pInput[3]);
 
-                __m128 *pOutputR = &pOutputChannel[0];
-                __m128 *pOutputG = &pOutputChannel[4];
-                __m128 *pOutputB = &pOutputChannel[8];
-                for (int v = 0, v4 = 0; v < kNumVecs; v++, v4 += 4)
-                {
-                    rpp_simd_load(rpp_load4_f32_to_f32, &tmpInArrayR[v4], &pInputR[v]);
-                    rpp_simd_load(rpp_load4_f32_to_f32, &tmpInArrayG[v4], &pInputG[v]);
-                    rpp_simd_load(rpp_load4_f32_to_f32, &tmpInArrayB[v4], &pInputB[v]);
-
-                    pOutputR[v] = _mm_fmadd_ps(pCoeffs[v], pInputR[v], pOutputR[v]);
-                    pOutputG[v] = _mm_fmadd_ps(pCoeffs[v], pInputG[v], pOutputG[v]);
-                    pOutputB[v] = _mm_fmadd_ps(pCoeffs[v], pInputB[v], pOutputB[v]);
-                }
+                for (int v = 0; v < kNumVecs; v++)
+                    pOutput[v] = _mm256_fmadd_ps(pCoeffs[v], pInput[v], pOutput[v]);
             }
 
-            int xStride = x * outputDescPtr->strides.wStride;
-            if(outputDescPtr->layout == RpptLayout::NCHW)
-                rpp_simd_store(rpp_store48_f32pln3_to_u8pln3, out_row_r + xStride, out_row_g + xStride, out_row_b + xStride, pOutputChannel);
-            if(outputDescPtr->layout == RpptLayout::NHWC)
-                rpp_simd_store(rpp_store48_f32pln3_to_u8pkd3, out_row_r + xStride, pOutputChannel);
+            rpp_simd_store(rpp_store32_f32_to_u8_avx, out_row + x, pOutput);
         }
-#endif
-            for (; x < outputImgSize.width; x++)
-            {
-                int x0 = index[x];
-                int k0 = x * kernelSize;
-                float sumr, sumg, sumb;
-                sumr = sumg = sumb = 0;
-                for (int k = 0; k < kernelSize; k++)
-                {
-                    int srcx = x0 + k;
-                    srcx = RPPPRANGECHECK(srcx, 0, inputImgSize.width - 1);
-                    int srcxStride = srcx * inputDescPtr->strides.wStride;
-                    sumr += (coeffs[k0 + k] * in_row_r[srcxStride]);
-                    sumg += (coeffs[k0 + k] * in_row_g[srcxStride]);
-                    sumb += (coeffs[k0 + k] * in_row_b[srcxStride]);
-                }
-                int xStride = x * outputDescPtr->strides.wStride;
-                out_row_r[xStride] = (Rpp8u)sumr;
-                out_row_g[xStride] = (Rpp8u)sumg;
-                out_row_b[xStride] = (Rpp8u)sumb;
-            }
-        }
-    }
-    else
-    {
-        for (int y = 0; y < outputImgSize.height; y++)
+        for (; x < bufferLength; x++)
         {
-            Rpp8u *out_row = outputPtr + y * outputDescPtr->strides.hStride;
-            float *in_row = inputPtr + y * inputDescPtr->strides.hStride;
-            Rpp32s bufferLength = outputImgSize.width;
-            Rpp32s alignedLength = bufferLength &~ (kNumLanes-1);
-
-            int x = 0;
-#ifdef __SSE2__
-            for (; x + kNumLanes <= alignedLength; x += kNumLanes)
+            int x0 = index[x];
+            int k0 = x * kernelSize;
+            float sum = 0;
+            for (int k = 0; k < kernelSize; k++)
             {
-                float tmpInArray[kNumLanes];
-                Rpp8u tmpOutArray[kNumLanes];
-
-                __m128 pOutput[kNumVecs], pCoeffs[kNumVecs];
-                set_zeros(pOutput, kNumVecs);
-
-                for (int k = 0; k < kernelSize; k++)
-                {
-                    __m128 pInput[kNumVecs];
-                    float tmpCoeffs[kNumLanes];
-
-                    for (int l = 0; l < kNumLanes; l++)
-                        tmpCoeffs[l] = coeffs[(x + l) * kernelSize + k];  // interleave per-column coefficients
-                    pCoeffs[0] = _mm_load_ps(tmpCoeffs);
-                    pCoeffs[1] = _mm_load_ps(tmpCoeffs + 4);
-                    pCoeffs[2] = _mm_load_ps(tmpCoeffs + 8);
-                    pCoeffs[3] = _mm_load_ps(tmpCoeffs + 12);
-
-                    for (int l = 0; l < kNumLanes; l++)
-                    {
-                        int srcx = index[x + l] + k;
-                        srcx = RPPPRANGECHECK(srcx, 0, inputImgSize.width - 1);
-                        tmpInArray[l] = in_row[srcx];
-                    }
-                    rpp_simd_load(rpp_load4_f32_to_f32, tmpInArray, pInput);
-                    rpp_simd_load(rpp_load4_f32_to_f32, tmpInArray + 4, pInput + 1);
-                    rpp_simd_load(rpp_load4_f32_to_f32, tmpInArray + 8, pInput + 2);
-                    rpp_simd_load(rpp_load4_f32_to_f32, tmpInArray + 12, pInput + 3);
-
-                    for (int v = 0; v < kNumVecs; v++)
-                        pOutput[v] = _mm_fmadd_ps(pCoeffs[v], pInput[v], pOutput[v]);
-                }
-
-                rpp_simd_store(rpp_store16_f32_to_u8, out_row + x, pOutput);
+                int srcx = x0 + k;
+                srcx = RPPPRANGECHECK(srcx, 0, inputImgSize.width - 1);
+                sum += (coeffs[k0 + k] * in_row[srcx]);
             }
-#endif
-            for (; x < bufferLength; x++)
-            {
-                int x0 = index[x];
-                int k0 = x * kernelSize;
-                float sum = 0;
-                for (int k = 0; k < kernelSize; k++)
-                {
-                    int srcx = x0 + k;
-                    srcx = RPPPRANGECHECK(srcx, 0, inputImgSize.width - 1);
-                    sum += (coeffs[k0 + k] * in_row[srcx]);
-                }
-                out_row[x] = (Rpp8u)sum;
-            }
+            out_row[x] = (Rpp8u)sum;
         }
     }
 }
