@@ -72,6 +72,7 @@ const __m128i xmm_maskp2 = _mm_setr_epi8(4, 0x80, 0x80, 0x80, 5, 0x80, 0x80, 0x8
 const __m128i xmm_maskp3 = _mm_setr_epi8(8, 0x80, 0x80, 0x80, 9, 0x80, 0x80, 0x80, 10, 0x80, 0x80, 0x80, 11, 0x80, 0x80, 0x80);
 const __m128i xmm_maskp4 = _mm_setr_epi8(12, 0x80, 0x80, 0x80, 13, 0x80, 0x80, 0x80, 14, 0x80, 0x80, 0x80, 15, 0x80, 0x80, 0x80);
 const __m128i xmm_store4_pkd_pixels = _mm_setr_epi8(0, 1, 8, 2, 3, 9, 4, 5, 10, 6, 7, 11, 0x80, 0x80, 0x80, 0x80);
+const __m128i xmm_store4_pkd_pixels2 = _mm_setr_epi8(0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11, 0x80, 0x80, 0x80, 0x80);
 const __m128 xmm_pChannel = _mm_set1_ps(3.0f);
 
 const __m256 avx_p0 = _mm256_set1_ps(0.0f);
@@ -89,6 +90,14 @@ const __m256i avx_px2 = _mm256_set1_epi32(2);
 const __m256i avx_px3 = _mm256_set1_epi32(3);
 const __m256i avx_px4 = _mm256_set1_epi32(4);
 const __m256i avx_px5 = _mm256_set1_epi32(5);
+const __m256i avx_shuff_to_pkd_mask = _mm256_setr_m128(xmm_store4_pkd_pixels2, xmm_store4_pkd_pixels2);
+const __m256i avx_perm_char_pkd8_mask = _mm256_setr_epi32(0, 1, 2, 4, 5, 6, 7, 3);
+const __m256i pxPermuteMask1 = _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7);
+const __m256i pxPermuteMask2 = _mm256_setr_epi32(0, 4, 1, 5, 2, 6, 3, 7);
+const __m256i pShuffMask1 = _mm256_setr_m128i(xmm_maskp1, xmm_maskp1);
+const __m256i pShuffMask2 = _mm256_setr_m128i(xmm_maskp2, xmm_maskp2);
+const __m256i pShuffMask3 = _mm256_setr_m128i(xmm_maskp3, xmm_maskp3);
+const __m256i pShuffMask4 = _mm256_setr_m128i(xmm_maskp4, xmm_maskp4);
 
 // Print helpers
 
@@ -729,6 +738,38 @@ inline RppStatus rpp_store48_f32pln3_to_u8pln3_avx(Rpp8u *dstPtrR, Rpp8u *dstPtr
     return RPP_SUCCESS;
 }
 
+inline RppStatus rpp_store96_f32pln3_to_u8pln3_avx(Rpp8u *dstPtrR, Rpp8u *dstPtrG, Rpp8u *dstPtrB, __m256 *p)
+{
+    __m256i px[7];
+
+    px[0] = _mm256_cvtps_epi32(p[0]);  /* Contains R01 - R08 */
+    px[1] = _mm256_cvtps_epi32(p[1]);  /* Contains R09 - R16 */
+    px[2] = _mm256_cvtps_epi32(p[2]);  /* Contains R17 - R24 */
+    px[3] = _mm256_cvtps_epi32(p[3]);  /* Contains R25 - R32 */
+    px[4] = _mm256_packus_epi16(_mm256_packus_epi32(px[0], px[1]), _mm256_packus_epi32(px[2], px[3]));  /* R01-R04|R09-R12|R17-R20|R25-R28|R05-R08|R13-R016|R21-R24|R29-R32 */
+
+    px[0] = _mm256_cvtps_epi32(p[4]); /* Contains G01 - G08 */
+    px[1] = _mm256_cvtps_epi32(p[5]);
+    px[2] = _mm256_cvtps_epi32(p[6]);
+    px[3] = _mm256_cvtps_epi32(p[7]);
+    px[5] = _mm256_packus_epi16(_mm256_packus_epi32(px[0], px[1]), _mm256_packus_epi32(px[2], px[3]));
+
+    px[0] = _mm256_cvtps_epi32(p[8]);  /* Contains B01 - B08 */
+    px[1] = _mm256_cvtps_epi32(p[9]);
+    px[2] = _mm256_cvtps_epi32(p[10]);
+    px[3] = _mm256_cvtps_epi32(p[11]);
+    px[6] = _mm256_packus_epi16(_mm256_packus_epi32(px[0], px[1]), _mm256_packus_epi32(px[2], px[3]));
+
+    px[4] = _mm256_permutevar8x32_epi32(px[4], pxPermuteMask2); /* R01-R04|R05-R08|R09-R12|R13-R16|R17-R20|R21-R024|R25-R28|R29-R32 */
+    px[5] = _mm256_permutevar8x32_epi32(px[5], pxPermuteMask2);
+    px[6] = _mm256_permutevar8x32_epi32(px[6], pxPermuteMask2);
+    _mm256_storeu_si256((__m256i *)dstPtrR, px[4]);
+    _mm256_storeu_si256((__m256i *)dstPtrG, px[5]);
+    _mm256_storeu_si256((__m256i *)dstPtrB, px[6]);
+
+    return RPP_SUCCESS;
+}
+
 inline RppStatus rpp_load48_u8pln3_to_f32pln3_avx(Rpp8u *srcPtrR, Rpp8u *srcPtrG, Rpp8u *srcPtrB, __m256 *p)
 {
     __m128i px[3];
@@ -781,6 +822,48 @@ inline RppStatus rpp_store48_f32pln3_to_u8pkd3_avx(Rpp8u *dstPtr, __m256 *p)
     _mm_storeu_si128((__m128i *)(dstPtr + 12), px[1]);    /* store [R05|G05|B05|R06|G06|B06|R07|G07|B07|R08|G08|B08|00|00|00|00] */
     _mm_storeu_si128((__m128i *)(dstPtr + 24), px[2]);    /* store [R09|G09|B09|R10|G10|B10|R11|G11|B11|R12|G12|B12|00|00|00|00] */
     _mm_storeu_si128((__m128i *)(dstPtr + 36), px[3]);    /* store [R13|G13|B13|R14|G14|B14|R15|G15|B15|R16|G16|B16|00|00|00|00] */
+
+    return RPP_SUCCESS;
+}
+
+inline RppStatus rpp_store96_f32pln3_to_u8pkd3_avx(Rpp8u *dstPtr, __m256 *p)
+{
+    __m256i px[7];
+
+    px[0] = _mm256_cvtps_epi32(p[0]); /* Contains R01 - R08 */
+    px[1] = _mm256_cvtps_epi32(p[4]); /* Contains G01 - G08 */
+    px[2] = _mm256_cvtps_epi32(p[8]); /* Contains B01 - B08 */
+    px[3] = _mm256_packus_epi16(_mm256_packus_epi32(px[0], px[1]), _mm256_packus_epi32(px[2], avx_px0)); /* R01-R04|G01-G04|B01-B04|00...|R05-R08|G05-G08|B05-B08|00...*/
+
+    px[0] = _mm256_cvtps_epi32(p[1]);
+    px[1] = _mm256_cvtps_epi32(p[5]);
+    px[2] = _mm256_cvtps_epi32(p[9]);
+    px[4] = _mm256_packus_epi16(_mm256_packus_epi32(px[0], px[1]), _mm256_packus_epi32(px[2], avx_px0)); /* R09-R12|G09-G12|B09-B12|00...|R13-R16|G13-G16|B13-B16|00...*/
+
+    px[0] = _mm256_cvtps_epi32(p[2]);
+    px[1] = _mm256_cvtps_epi32(p[6]);
+    px[2] = _mm256_cvtps_epi32(p[10]);
+    px[5] = _mm256_packus_epi16(_mm256_packus_epi32(px[0], px[1]), _mm256_packus_epi32(px[2], avx_px0));
+
+    px[0] = _mm256_cvtps_epi32(p[3]);
+    px[1] = _mm256_cvtps_epi32(p[7]);
+    px[2] = _mm256_cvtps_epi32(p[11]);
+    px[6] = _mm256_packus_epi16(_mm256_packus_epi32(px[0], px[1]), _mm256_packus_epi32(px[2], avx_px0));
+
+    px[3] = _mm256_shuffle_epi8(px[3], avx_shuff_to_pkd_mask); // Packs the RGB pixels
+    px[4] = _mm256_shuffle_epi8(px[4], avx_shuff_to_pkd_mask);
+    px[5] = _mm256_shuffle_epi8(px[5], avx_shuff_to_pkd_mask);
+    px[6] = _mm256_shuffle_epi8(px[6], avx_shuff_to_pkd_mask);
+
+    px[3] = _mm256_permutevar8x32_epi32(px[3], avx_perm_char_pkd8_mask); // Rearranges the pixels
+    px[4] = _mm256_permutevar8x32_epi32(px[4], avx_perm_char_pkd8_mask);
+    px[5] = _mm256_permutevar8x32_epi32(px[5], avx_perm_char_pkd8_mask);
+    px[6] = _mm256_permutevar8x32_epi32(px[6], avx_perm_char_pkd8_mask);
+
+    _mm256_storeu_si256((__m256i *)dstPtr, px[3]);
+    _mm256_storeu_si256((__m256i *)(dstPtr + 24), px[4]);
+    _mm256_storeu_si256((__m256i *)(dstPtr + 48), px[5]);
+    _mm256_storeu_si256((__m256i *)(dstPtr + 72), px[6]);
 
     return RPP_SUCCESS;
 }
@@ -972,16 +1055,11 @@ inline RppStatus rpp_normalize48_avx(__m256 *p)
     return RPP_SUCCESS;
 }
 
-const __m256i pxPermuteMaskL = _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7);
-const __m256i pShuffMask1 = _mm256_setr_m128i(xmm_maskp1, xmm_maskp1);
-const __m256i pShuffMask2 = _mm256_setr_m128i(xmm_maskp2, xmm_maskp2);
-const __m256i pShuffMask3 = _mm256_setr_m128i(xmm_maskp3, xmm_maskp3);
-const __m256i pShuffMask4 = _mm256_setr_m128i(xmm_maskp4, xmm_maskp4);
 inline RppStatus rpp_load32_u8_to_f32_avx(Rpp8u *srcPtr, __m256 *p)
 {
     __m256i pxTemp;
     pxTemp = _mm256_loadu_si256((__m256i *)srcPtr);
-    pxTemp = _mm256_permutevar8x32_epi32(pxTemp, pxPermuteMaskL); // Done in such a way so that when shuffling we will get continuous elements
+    pxTemp = _mm256_permutevar8x32_epi32(pxTemp, pxPermuteMask1); // Done in such a way so that when shuffling we will get continuous elements
     p[0] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp, pShuffMask1));
     p[1] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp, pShuffMask2));
     p[2] = _mm256_cvtepi32_ps(_mm256_shuffle_epi8(pxTemp, pShuffMask3));
@@ -1012,8 +1090,6 @@ inline RppStatus rpp_load8_f32_to_f32_avx(Rpp32f *srcPtr, __m256 *p)
     return RPP_SUCCESS;
 }
 
-const __m256i pxPeermuteMask = _mm256_setr_epi32(0, 4, 1, 5, 2, 6, 3, 7);
-
 inline RppStatus rpp_store32_f32_to_u8_avx(Rpp8u *dstPtr, __m256 *p)
 {
     __m256i px[4];
@@ -1025,8 +1101,8 @@ inline RppStatus rpp_store32_f32_to_u8_avx(Rpp8u *dstPtr, __m256 *p)
     px[0] = _mm256_packus_epi32(px[0], px[1]);    /* pixels 0-7 */
     px[1] = _mm256_packus_epi32(px[2], px[3]);    /* pixels 8-15 */
     px[0] = _mm256_packus_epi16(px[0], px[1]);    /* pixels 0-15 */
-    px[0] = _mm256_permutevar8x32_epi32(px[0], pxPeermuteMask);
-    _mm256_storeu_si256((__m256i *)dstPtr, px[0]);    /* store pixels 0-15 */
+    px[0] = _mm256_permutevar8x32_epi32(px[0], pxPermuteMask2);
+    _mm256_storeu_si256((__m256i *)dstPtr, px[0]);    /* store pixels 0-32 */
 
     return RPP_SUCCESS;
 }
