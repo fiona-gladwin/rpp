@@ -986,33 +986,6 @@ omp_set_dynamic(0);
         compute_roi_validation_host(roiPtrInput, &roi, &roiDefault, roiType);
 
         compute_dst_size_cap_host(&dstImgSize[batchCount], dstDescPtr);
-        Rpp32f wRatio = ((Rpp32f)(roi.xywhROI.roiWidth)) / ((Rpp32f)(dstImgSize[batchCount].width));
-        Rpp32f hRatio = ((Rpp32f)(roi.xywhROI.roiHeight)) / ((Rpp32f)(dstImgSize[batchCount].height));
-        Filter vFilter(interpolationType, roi.xywhROI.roiHeight, dstImgSize[batchCount].height, hRatio);    // Initialize vertical resampling filter
-        Filter hFilter(interpolationType, roi.xywhROI.roiWidth, dstImgSize[batchCount].width, wRatio);      // Initialize Horizontal resampling filter
-        Rpp32f hOffset = (hRatio - 1) * 0.5f - vFilter.radius;
-        Rpp32f wOffset = (wRatio - 1) * 0.5f - hFilter.radius;
-
-        Rpp32s rowIndex[dstImgSize[batchCount].height], colIndex[dstImgSize[batchCount].width];
-        Rpp32f rowCoeffs[dstImgSize[batchCount].height * vFilter.size];
-        Rpp32f colCoeffs[((dstImgSize[batchCount].width + 3) & ~3) * hFilter.size]; // Buffer size is made a multiple of 4 inorder to allocate sufficient memory for Horizontal coefficients
-
-        // Pre-compute row index and coefficients
-        for(int indexCount = 0, coeffCount = 0; indexCount < dstImgSize[batchCount].height; indexCount++, coeffCount += vFilter.size)
-        {
-            Rpp32f weightParam;
-            compute_resize_src_loc(indexCount, hRatio, rowIndex[indexCount], weightParam, hOffset);
-            compute_row_coefficients(interpolationType, vFilter, weightParam, &rowCoeffs[coeffCount]);
-        }
-        // Pre-compute col index and coefficients
-        for(int indexCount = 0, coeffCount = 0; indexCount < dstImgSize[batchCount].width; indexCount++)
-        {
-            Rpp32f weightParam;
-            compute_resize_src_loc(indexCount, wRatio, colIndex[indexCount], weightParam, wOffset, srcDescPtr->strides.wStride);
-            coeffCount = (indexCount % 4 == 0) ? (indexCount * hFilter.size) : coeffCount + 1;
-            compute_col_coefficients(interpolationType, hFilter, weightParam, &colCoeffs[coeffCount], srcDescPtr->strides.wStride);
-        }
-
         T *srcPtrImage, *dstPtrImage;
         srcPtrImage = srcPtr + batchCount * srcDescPtr->strides.nStride;
         dstPtrImage = dstPtr + batchCount * dstDescPtr->strides.nStride;
@@ -1022,28 +995,67 @@ omp_set_dynamic(0);
         srcImgSize.width = roi.xywhROI.roiWidth;
         srcImgSize.height = roi.xywhROI.roiHeight;
 
-        // The intermediate result from Vertical Resampling will have the src width and dst height
-        RpptImagePatch tempImgSize;
-        tempImgSize.width = roi.xywhROI.roiWidth;
-        tempImgSize.height = dstImgSize[batchCount].height;
+        Rpp32f hRatio = ((Rpp32f)(roi.xywhROI.roiHeight)) / ((Rpp32f)(dstImgSize[batchCount].height));
+        Rpp32f wRatio = ((Rpp32f)(roi.xywhROI.roiWidth)) / ((Rpp32f)(dstImgSize[batchCount].width));
+        Filter vFilter(interpolationType, roi.xywhROI.roiHeight, dstImgSize[batchCount].height, hRatio);    // Initialize vertical resampling filter
+        Filter hFilter(interpolationType, roi.xywhROI.roiWidth, dstImgSize[batchCount].width, wRatio);      // Initialize Horizontal resampling filter
+        Rpp32f hOffset = (hRatio - 1) * 0.5f - vFilter.radius;
+        Rpp32f wOffset = (wRatio - 1) * 0.5f - hFilter.radius;
+        Rpp32s rowIndex[dstImgSize[batchCount].height], colIndex[dstImgSize[batchCount].width];
+        Rpp32f rowCoeffs[dstImgSize[batchCount].height * vFilter.size];
+        Rpp32f colCoeffs[((dstImgSize[batchCount].width + 3) & ~3) * hFilter.size]; // Buffer size is made a multiple of 4 inorder to allocate sufficient memory for Horizontal coefficients
 
-        // Allocate temproary buffer to store intermediate result of separable resampling
-        Rpp32f *tempPtrImage;
-        tempPtrImage = (Rpp32f *)malloc(srcDescPtr->w * dstDescPtr->h * srcDescPtr->c * sizeof(Rpp32f));
+        if(srcImgSize.height != dstImgSize[batchCount].height)
+        {
+            // Pre-compute row index and coefficients
+            for(int indexCount = 0, coeffCount = 0; indexCount < dstImgSize[batchCount].height; indexCount++, coeffCount += vFilter.size)
+            {
+                Rpp32f weightParam;
+                compute_resize_src_loc(indexCount, hRatio, rowIndex[indexCount], weightParam, hOffset);
+                compute_row_coefficients(interpolationType, vFilter, weightParam, &rowCoeffs[coeffCount]);
+            }
+        }
+        if(srcImgSize.width != dstImgSize[batchCount].width)
+        {
+            // Pre-compute col index and coefficients
+            for(int indexCount = 0, coeffCount = 0; indexCount < dstImgSize[batchCount].width; indexCount++)
+            {
+                Rpp32f weightParam;
+                compute_resize_src_loc(indexCount, wRatio, colIndex[indexCount], weightParam, wOffset, srcDescPtr->strides.wStride);
+                coeffCount = (indexCount % 4 == 0) ? (indexCount * hFilter.size) : coeffCount + 1;
+                compute_col_coefficients(interpolationType, hFilter, weightParam, &colCoeffs[coeffCount], srcDescPtr->strides.wStride);
+            }
+        }
 
-        // Create description pointer for the temporary buffer
-        RpptDesc tempDesc;
-        tempDesc = *srcDescPtr;
-        RpptDescPtr tempDescPtr = &tempDesc;
-        tempDescPtr->h = dstDescPtr->h;
+        if(srcImgSize.width == dstImgSize[batchCount].width && srcImgSize.height != dstImgSize[batchCount].height) // If src and dst width is same only vertical resampling is done
+            compute_separable_vertical_resample(srcPtrImage, dstPtrImage, srcDescPtr, dstDescPtr, srcImgSize, dstImgSize[batchCount], rowIndex, rowCoeffs, vFilter);
+        else if(srcImgSize.width != dstImgSize[batchCount].width && srcImgSize.height == dstImgSize[batchCount].height) // If src and dst height is same only horizontal resampling is done
+            compute_separable_horizontal_resample(srcPtrImage, dstPtrImage, srcDescPtr, dstDescPtr, srcImgSize, dstImgSize[batchCount], colIndex, colCoeffs, hFilter);
+        else if(srcImgSize.width != dstImgSize[batchCount].width && srcImgSize.height != dstImgSize[batchCount].height)
+        {
+            // The intermediate result from Vertical Resampling will have the src width and dst height
+            RpptImagePatch tempImgSize;
+            tempImgSize.width = roi.xywhROI.roiWidth;
+            tempImgSize.height = dstImgSize[batchCount].height;
 
-        // The channel stride changes with the change in the height for PLN images
-        if(srcDescPtr->layout == RpptLayout::NCHW)
-            tempDescPtr->strides.cStride = srcDescPtr->w * dstDescPtr->h;
+            // Create description pointer for the temporary buffer
+            RpptDesc tempDesc;
+            tempDesc = *srcDescPtr;
+            RpptDescPtr tempDescPtr = &tempDesc;
+            tempDescPtr->h = dstDescPtr->h;
 
-        compute_separable_vertical_resample(srcPtrImage, tempPtrImage, srcDescPtr, tempDescPtr, srcImgSize, tempImgSize, rowIndex, rowCoeffs, vFilter);
-        compute_separable_horizontal_resample(tempPtrImage, dstPtrImage, tempDescPtr, dstDescPtr, tempImgSize, dstImgSize[batchCount], colIndex, colCoeffs, hFilter);
-        free(tempPtrImage);
+            // The channel stride changes with the change in the height for PLN images
+            if(srcDescPtr->layout == RpptLayout::NCHW)
+                tempDescPtr->strides.cStride = srcDescPtr->w * dstDescPtr->h;
+
+            // Allocate temproary buffer to store intermediate result of separable resampling
+            Rpp32f *tempPtrImage;
+            tempPtrImage = (Rpp32f *)malloc(srcDescPtr->w * dstDescPtr->h * srcDescPtr->c * sizeof(Rpp32f));
+
+            compute_separable_vertical_resample(srcPtrImage, tempPtrImage, srcDescPtr, tempDescPtr, srcImgSize, tempImgSize, rowIndex, rowCoeffs, vFilter);
+            compute_separable_horizontal_resample(tempPtrImage, dstPtrImage, tempDescPtr, dstDescPtr, tempImgSize, dstImgSize[batchCount], colIndex, colCoeffs, hFilter);
+            free(tempPtrImage);
+        }
     }
 
     return RPP_SUCCESS;
