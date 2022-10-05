@@ -182,6 +182,9 @@ int main(int argc, char **argv)
         case 5:
             strcpy(funcName, "mel_filter_bank");
             break;
+        case 6:
+            strcpy(funcName, "normalize");
+            break;
         default:
             strcpy(funcName, "test_case");
             break;
@@ -526,6 +529,33 @@ int main(int argc, char **argv)
             free(srcDims);
             free(test_inputf32);
             free(test_outputf32);
+            break;
+        }
+        case 6:
+        {
+            test_case_name = "normalize";
+            Rpp32s axis_mask = 2;
+            Rpp32f mean, std_dev, scale, shift, epsilon;
+            mean = std_dev = scale = shift = epsilon = 0.0f;
+            Rpp32s ddof = 0;
+            Rpp32s num_of_dims = 2;
+            
+            start_omp = omp_get_wtime();
+            start = clock();
+            if (ip_bitDepth == 2)
+            {
+                rppt_normalize_audio_host(inputf32, srcDescPtr, outputf32, dstDescPtr, srcLengthTensor, channelsTensor, axis_mask, 
+                                          mean, std_dev, scale, shift, epsilon, ddof, num_of_dims);
+            }
+            else
+                missingFuncFlag = 1;
+
+            std::cerr<<"printing output values"<<std::endl;
+            for(int i = 0; i < 10 ; i++)
+                std::cerr<<std::setprecision(11) << outputf32[i]<<endl;
+
+
+            // verify_output(outputf32, shape, noOfAudioFiles, test_case_name, dstDescPtr->strides.nStride, audioNames);
             break;
         }
         default:

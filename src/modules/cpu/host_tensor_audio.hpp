@@ -29,5 +29,6 @@ THE SOFTWARE.
 #include "kernel/down_mixing.hpp"
 #include "kernel/slice.hpp"
 #include "kernel/mel_filter_bank.hpp"
+#include "kernel/normalize.hpp"
 
 #endif // HOST_TENSOR_AUDIO_HPP
