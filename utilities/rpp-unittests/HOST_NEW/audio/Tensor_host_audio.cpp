@@ -467,25 +467,36 @@ int main(int argc, char **argv)
             Rpp32s shape[noOfAudioFiles];
             Rpp32f fillValues[noOfAudioFiles];
             Rpp32s axes = 0;
+            Rpp32s numOfDims = srcDescPtr->c == 1 ? 1 : 2;
             RpptOutOfBoundsPolicy policyType = RpptOutOfBoundsPolicy::PAD;
-            for (i = 0; i < noOfAudioFiles; i++)
+            
+            Rpp32s *srcDimsTensor = (Rpp32s *) calloc(noOfAudioFiles * numOfDims, sizeof(Rpp32s));
+            
+            for (i = 0; i < noOfAudioFiles * numOfDims; i+=numOfDims)
             {
-                anchor[i] = 100;
-                shape[i] = 200;
-                fillValues[i] = 0.0f;
+                srcDimsTensor[i] = srcLengthTensor[i];
+                srcDimsTensor[i + 1] = channelsTensor[i];
+                shape[i] = 100;
+                shape[i + 1] = 2;
+                for(int d = 0; d < numOfDims; d++)
+                {
+                    anchor[i + d] = 0;
+                    fillValues[i] = 0.5f;   
+                }
             }
 
             start_omp = omp_get_wtime();
             start = clock();
             if (ip_bitDepth == 2)
             {
-                rppt_slice_host(inputf32, srcDescPtr, outputf32, dstDescPtr, srcLengthTensor, anchor, shape, &axes, fillValues, normalizedAnchor, normalizedShape, policyType);
+                rppt_slice_host(inputf32, srcDescPtr, outputf32, dstDescPtr, srcDimsTensor, anchor, shape, &axes, fillValues, numOfDims, normalizedAnchor, normalizedShape, policyType);
             }
             else
                 missingFuncFlag = 1;
 
             std::cerr<<"printing output values"<<std::endl;
-            for(int i = 0; i < shape[0] ; i++)
+            Rpp32s size = numOfDims == 1 ? shape[0] : shape[0] * shape[1];
+            for(int i = 0; i < size; i++)
                 std::cerr<<std::setprecision(11)<<outputf32[i]<<endl;
 
 
