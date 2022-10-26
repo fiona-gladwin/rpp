@@ -624,8 +624,8 @@ typedef struct
     hipMemRpp32f float3Arr[10];
     hipMemRpp64f doubleArr[10];
     hipMemRpp32u uintArr[10];
-    hipMemRpp32u uint2Arr[10];
     hipMemRpp32s intArr[10];
+    hipMemRpp32s int2Arr[10];
     hipMemRpp8u ucharArr[10];
     hipMemRpp8s charArr[10];
     hipMemRpptRGB rgbArr;
