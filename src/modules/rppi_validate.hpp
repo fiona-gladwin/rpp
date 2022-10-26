@@ -171,6 +171,13 @@ inline void copy_param_float(float *param, rpp::Handle& handle, Rpp32u paramInde
 #endif // backend
 }
 
+inline void copy_param_float2(float *param, rpp::Handle& handle, Rpp32u paramIndex)
+{
+#ifdef HIP_COMPILE
+    hipMemcpy(handle.GetInitHandle()->mem.mgpu.float2Arr[paramIndex].floatmem, param, sizeof(Rpp32f) * handle.GetBatchSize() * 2, hipMemcpyHostToDevice);
+#endif
+}
+
 inline void copy_param_float3(float *param, rpp::Handle& handle, Rpp32u paramIndex)
 {
 #ifdef HIP_COMPILE
@@ -201,6 +208,13 @@ inline void copy_param_int(int *param, rpp::Handle& handle, Rpp32u paramIndex)
     hipMemcpy(handle.GetInitHandle()->mem.mgpu.intArr[paramIndex].intmem, handle.GetInitHandle()->mem.mcpu.intArr[paramIndex].intmem, sizeof(Rpp32s) * handle.GetBatchSize(), hipMemcpyHostToDevice);
 #elif defined(OCL_COMPILE)
     clEnqueueWriteBuffer(handle.GetStream(), handle.GetInitHandle()->mem.mgpu.intArr[paramIndex].intmem, CL_FALSE, 0, sizeof(Rpp32s) * handle.GetBatchSize(), handle.GetInitHandle()->mem.mcpu.intArr[paramIndex].intmem, 0, NULL, NULL);
+#endif // backend
+}
+
+inline void copy_param_int2(int *param, rpp::Handle& handle, Rpp32u paramIndex)
+{
+#ifdef HIP_COMPILE
+    hipMemcpy(handle.GetInitHandle()->mem.mgpu.int2Arr[paramIndex].intmem, param, sizeof(Rpp32s) * handle.GetBatchSize() * 2, hipMemcpyHostToDevice);
 #endif // backend
 }
 
