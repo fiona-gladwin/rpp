@@ -201,6 +201,9 @@ int main(int argc, char **argv)
         case 2:
             strcpy(funcName, "pre_emphasis_filter");
             break;
+        case 4:
+            strcpy(funcName, "slice");
+            break;
         default:
             strcpy(funcName, "test_case");
             break;
@@ -458,6 +461,47 @@ int main(int argc, char **argv)
 
             hipMemcpy(outputf32, d_outputf32, ioBufferSizeInBytes_f32, hipMemcpyDeviceToHost);
             verify_output(outputf32, dstDescPtr, dstDims, test_case_name, audioNames);
+            break;
+        }
+        case 4:
+        {
+            test_case_name = "slice";
+
+            bool normalizedAnchor = false;
+            bool normalizedShape = false;
+            Rpp32f fillValues[srcDescPtr->c];
+            Rpp32s axes = 0;
+            RpptOutOfBoundsPolicy policyType = RpptOutOfBoundsPolicy::TRIMTOSHAPE;
+            Rpp32s numDims = 2;
+            Rpp32s srcDimsTensor[noOfAudioFiles * numDims];
+            Rpp32f anchor[noOfAudioFiles * numDims];
+            Rpp32f shape[noOfAudioFiles * numDims];
+
+            for (i = 0, j = i * 2; i < noOfAudioFiles; i++)
+            {
+                srcDimsTensor[j] = srcLengthTensor[i];
+                srcDimsTensor[j + 1] = channelsTensor[i];
+                shape[j] =  dstDims[i].width = 20;
+                shape[j + 1] = dstDims[i].height = 1;
+                anchor[j] = anchor[j + 1] = 0;
+            }
+            fillValues[0] = 0.5f;
+            float * d_fillValues;
+            hipMalloc(&d_fillValues, srcDescPtr->c * sizeof(float));
+            hipMemcpy(d_fillValues, fillValues, srcDescPtr->c * sizeof(float), hipMemcpyHostToDevice);
+            
+            start_omp = omp_get_wtime();
+            start = clock();
+            if (ip_bitDepth == 2)
+            {
+                rppt_slice_gpu(d_inputf32, srcDescPtr, d_outputf32, dstDescPtr, srcDimsTensor, anchor, shape, axes, fillValues, normalizedAnchor, normalizedShape, policyType, handle);
+            }
+            else
+                missingFuncFlag = 1;
+
+            hipMemcpy(outputf32, d_outputf32, oBufferSizeInBytes_f32, hipMemcpyDeviceToHost);
+            
+            // verify_output(outputf32, dstDescPtr, dstDims, test_case_name, audioNames);
             break;
         }
         default:

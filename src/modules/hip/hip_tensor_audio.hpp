@@ -25,5 +25,6 @@ THE SOFTWARE.
 
 #include "kernel/to_decibels.hpp"
 #include "kernel/pre_emphasis_filter.hpp"
+#include "kernel/slice.hpp"
 
 #endif // HIP_TENSOR_AUDIO_HPP

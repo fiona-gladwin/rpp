@@ -322,4 +322,40 @@ RppStatus rppt_pre_emphasis_filter_gpu(RppPtr_t srcPtr,
 #endif // backend
 }
 
+RppStatus rppt_slice_gpu(RppPtr_t srcPtr,
+                         RpptDescPtr srcDescPtr,
+                         RppPtr_t dstPtr,
+                         RpptDescPtr dstDescPtr,
+                         Rpp32s *srcLengthTensor,
+                         Rpp32f *anchorTensor,
+                         Rpp32f *shapeTensor,
+                         Rpp32s axisMask,
+                         Rpp32f *fillValues,
+                         bool normalizedAnchor,
+                         bool normalizedShape,
+                         RpptOutOfBoundsPolicy policyType,
+                         rppHandle_t rppHandle)
+{
+#ifdef HIP_COMPILE
+    Rpp32u paramIndex = 0;
+    copy_param_int2(srcLengthTensor, rpp::deref(rppHandle), paramIndex);
+    copy_param_float2(anchorTensor, rpp::deref(rppHandle), paramIndex++);
+    copy_param_float2(shapeTensor, rpp::deref(rppHandle), paramIndex++);
+    
+    hip_exec_slice_tensor((Rpp32f*)srcPtr,
+                      srcDescPtr,
+                      (Rpp32f*)dstPtr,
+                      dstDescPtr,
+                      axisMask,
+                      fillValues,
+                      normalizedAnchor,
+                      normalizedShape,
+                      policyType,
+                      rpp::deref(rppHandle));
+
+    return RPP_SUCCESS;
+#elif defined(OCL_COMPILE)
+    return RPP_ERROR_NOT_IMPLEMENTED;
+#endif // backend
+}
 #endif // GPU_SUPPORT
