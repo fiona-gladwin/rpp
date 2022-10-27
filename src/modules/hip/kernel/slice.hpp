@@ -55,8 +55,8 @@ RppStatus hip_exec_slice_tensor(Rpp32f *srcPtr,
                        dstPtr,
                        make_uint2(dstDescPtr->strides.nStride, dstDescPtr->strides.hStride),
                        handle.GetInitHandle()->mem.mgpu.int2Arr[0].intmem,
+                       handle.GetInitHandle()->mem.mgpu.float2Arr[0].floatmem,
                        handle.GetInitHandle()->mem.mgpu.float2Arr[1].floatmem,
-                       handle.GetInitHandle()->mem.mgpu.float2Arr[2].floatmem,
                        *fillValues,
                        policyType);
 
