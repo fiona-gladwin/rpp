@@ -24,7 +24,11 @@ __global__ void slice_tensor(float *srcPtr,
     uint srcIdx = (id_z * srcStridesNH.x) + ((id_y + anchorTensor[stride]) * srcStridesNH.y) + (id_x + anchorTensor[stride + 1]);
     uint dstIdx = (id_z * dstStridesNH.x) + (id_y * dstStridesNH.y) + id_x;
     
-    dstPtr[dstIdx] = srcPtr[srcIdx];
+    if(id_y >= srcLengthTensor[stride] || id_x >= srcLengthTensor[stride + 1]) {
+        dstPtr[dstIdx] = fillValue;
+    } else {
+        dstPtr[dstIdx] = srcPtr[srcIdx];
+    }
 }
 
 RppStatus hip_exec_slice_tensor(Rpp32f *srcPtr,
