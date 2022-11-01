@@ -125,7 +125,7 @@ RppStatus rppt_down_mixing_host(RppPtr_t srcPtr, RpptDescPtr srcDescPtr, RppPtr_
 
 RppStatus rppt_slice_host(RppPtr_t srcPtr, RpptDescPtr srcDescPtr, RppPtr_t dstPtr, RpptDescPtr dstDescPtr, Rpp32s *srcLengthTensor, Rpp32f *anchorTensor, Rpp32f *shapeTensor, Rpp32s axisMask, Rpp32f *fillValues, bool normalizedAnchor, bool normalizedShape, RpptOutOfBoundsPolicy policyType);
 #ifdef GPU_SUPPORT
-RppStatus rppt_slice_gpu(RppPtr_t srcPtr, RpptDescPtr srcDescPtr, RppPtr_t dstPtr, RpptDescPtr dstDescPtr, Rpp32s *srcLengthTensor, Rpp32f *anchorTensor, Rpp32f *shapeTensor, Rpp32s axisMask, Rpp32f *fillValues, bool normalizedAnchor, bool normalizedShape, RpptOutOfBoundsPolicy policyType, rppHandle_t rppHandle);
+RppStatus rppt_slice_gpu(RppPtr_t srcPtr, RpptDescPtr srcDescPtr, RppPtr_t dstPtr, RpptDescPtr dstDescPtr, Rpp32s *srcLengthTensor, Rpp32f *anchorTensor, Rpp32f *shapeTensor, Rpp32f *fillValues, rppHandle_t rppHandle);
 #endif
 
 // Mel Filter Bank augmentation

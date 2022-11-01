@@ -8,8 +8,7 @@ __global__ void slice_tensor(float *srcPtr,
                                            int *srcLengthTensor,
                                            float *anchorTensor,
                                            float *shapeTensor,
-                                           float fillValue,
-                                           RpptOutOfBoundsPolicy policyType)
+                                           float fillValue)
 {
     int id_x = (hipBlockIdx_x * hipBlockDim_x + hipThreadIdx_x);
     int id_y = hipBlockIdx_y * hipBlockDim_y + hipThreadIdx_y;
@@ -35,11 +34,7 @@ RppStatus hip_exec_slice_tensor(Rpp32f *srcPtr,
                                 RpptDescPtr srcDescPtr,
                                 Rpp32f *dstPtr,
                                 RpptDescPtr dstDescPtr,
-                                Rpp32s axisMask,
                                 Rpp32f *fillValues,
-                                bool normalizedAnchor,
-                                bool normalizedShape,
-                                RpptOutOfBoundsPolicy policyType,
                                 rpp::Handle& handle)
 {
     int localThreads_x = LOCAL_THREADS_X;
@@ -61,8 +56,7 @@ RppStatus hip_exec_slice_tensor(Rpp32f *srcPtr,
                        handle.GetInitHandle()->mem.mgpu.int2Arr[0].intmem,
                        handle.GetInitHandle()->mem.mgpu.float2Arr[0].floatmem,
                        handle.GetInitHandle()->mem.mgpu.float2Arr[1].floatmem,
-                       *fillValues,
-                       policyType);
+                       *fillValues);
 
     return RPP_SUCCESS;
 }

@@ -329,11 +329,7 @@ RppStatus rppt_slice_gpu(RppPtr_t srcPtr,
                          Rpp32s *srcLengthTensor,
                          Rpp32f *anchorTensor,
                          Rpp32f *shapeTensor,
-                         Rpp32s axisMask,
                          Rpp32f *fillValues,
-                         bool normalizedAnchor,
-                         bool normalizedShape,
-                         RpptOutOfBoundsPolicy policyType,
                          rppHandle_t rppHandle)
 {
 #ifdef HIP_COMPILE
@@ -346,11 +342,7 @@ RppStatus rppt_slice_gpu(RppPtr_t srcPtr,
                       srcDescPtr,
                       (Rpp32f*)dstPtr,
                       dstDescPtr,
-                      axisMask,
                       fillValues,
-                      normalizedAnchor,
-                      normalizedShape,
-                      policyType,
                       rpp::deref(rppHandle));
 
     return RPP_SUCCESS;
