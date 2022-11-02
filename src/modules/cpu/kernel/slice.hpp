@@ -29,11 +29,7 @@ RppStatus slice_host_tensor(Rpp32f *srcPtr,
                             Rpp32s *srcDimsTensor,
                             Rpp32f *anchorTensor,
                             Rpp32f *shapeTensor,
-                            Rpp32s axisMask,
-                            Rpp32f *fillValues,
-                            bool normalizedAnchor,
-                            bool normalizedShape,
-                            RpptOutOfBoundsPolicy policyType)
+                            Rpp32f *fillValues)
 {
 	omp_set_dynamic(0);
 #pragma omp parallel for num_threads(srcDescPtr->n)
@@ -44,26 +40,14 @@ RppStatus slice_host_tensor(Rpp32f *srcPtr,
         Rpp32s sampleBatchCount = batchCount * 2;
 
         // Slice for 1D input
-        if (srcDimsTensor[sampleBatchCount + 1] == 1) {
+        if (srcDescPtr->w == 1 && dstDescPtr->w == 1) {
             Rpp32s srcBufferLength = srcDimsTensor[sampleBatchCount];
-            Rpp32f anchorRaw = anchorTensor[batchCount];
-            Rpp32f shapeRaw = shapeTensor[batchCount];
-            Rpp32f fillValue = fillValues[batchCount];
-
-            // If normalized between 0 - 1 convert to actual indices
-            if (normalizedAnchor) {
-                anchorRaw *= srcBufferLength;
-            }
-            if (normalizedShape) { // Doubt
-                shapeRaw *= srcBufferLength;
-            }
+            Rpp32f anchorRaw = anchorTensor[sampleBatchCount];
+            Rpp32f shapeRaw = shapeTensor[sampleBatchCount];
+            Rpp32f fillValue = fillValues[0];
 
             Rpp32s anchor = std::llround(anchorRaw);
             Rpp32s shape = std::llround(shapeRaw);
-
-            Rpp32s sliceEnd = anchor + shape;
-            applyPolicy(policyType, &anchor, &sliceEnd, &srcBufferLength);  // check the policy and update the values accordingly
-            shape = sliceEnd - anchor;
 
             if (anchor == 0 && shape == srcBufferLength) {
             // Do a memcpy if output dimension matches input dimension
@@ -117,37 +101,19 @@ RppStatus slice_host_tensor(Rpp32f *srcPtr,
                     }
                 }
             }
-        } else if (srcDimsTensor[sampleBatchCount + 1] > 1) {
+        } else {
             Rpp32f anchorRaw[2], shapeRaw[2];
             Rpp32s anchor[2], shape[2];
             anchorRaw[0] = anchorTensor[sampleBatchCount];
             anchorRaw[1] = anchorTensor[sampleBatchCount + 1];
-            shapeRaw[0] = shapeTensor[0];
-            shapeRaw[1] = shapeTensor[1];
-            Rpp32f fillValue = fillValues[batchCount];
-
-            // If normalized between 0 - 1 convert to actual indices
-            if (normalizedAnchor) {
-                anchorRaw[0] *= srcDimsTensor[sampleBatchCount];
-                anchorRaw[1] *= srcDimsTensor[sampleBatchCount + 1];
-            }
-            if (normalizedShape) {
-                shapeRaw[0] *= srcDimsTensor[sampleBatchCount];
-                shapeRaw[1] *= srcDimsTensor[sampleBatchCount + 1];
-            }
+            shapeRaw[0] = shapeTensor[sampleBatchCount];
+            shapeRaw[1] = shapeTensor[sampleBatchCount + 1];
+            Rpp32f fillValue = fillValues[0];
 
             anchor[0] = std::llround(anchorRaw[0]);
             shape[0] = std::llround(shapeRaw[0]);
             anchor[1] = std::llround(anchorRaw[1]);
             shape[1] = std::llround(shapeRaw[1]);
-
-            Rpp32s sliceEnd[2];
-            sliceEnd[0] = anchor[0] + shape[0];
-            sliceEnd[1] = anchor[1] + shape[1];
-            applyPolicy(policyType, &anchor[0], &sliceEnd[0], &srcDimsTensor[sampleBatchCount]);    // check the policy and update the values accordingly
-            applyPolicy(policyType, &anchor[1], &sliceEnd[1], &srcDimsTensor[sampleBatchCount + 1]);    // check the policy and update the values accordingly
-            shape[0] = sliceEnd[0] - anchor[0];
-            shape[1] = sliceEnd[1] - anchor[1];
 
             Rpp32s rowBound = std::min(srcDimsTensor[sampleBatchCount], shape[0]);
             Rpp32s colBound = std::min(srcDimsTensor[sampleBatchCount + 1], shape[1]);

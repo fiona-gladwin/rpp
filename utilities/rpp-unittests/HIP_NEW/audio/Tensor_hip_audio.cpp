@@ -467,11 +467,7 @@ int main(int argc, char **argv)
         {
             test_case_name = "slice";
 
-            bool normalizedAnchor = false;
-            bool normalizedShape = false;
             Rpp32f fillValues[srcDescPtr->c];
-            Rpp32s axes = 0;
-            RpptOutOfBoundsPolicy policyType = RpptOutOfBoundsPolicy::TRIMTOSHAPE;
             Rpp32s numDims = 2;
             Rpp32s srcDimsTensor[noOfAudioFiles * numDims];
             Rpp32f anchor[noOfAudioFiles * numDims];
@@ -486,15 +482,12 @@ int main(int argc, char **argv)
                 anchor[j] = anchor[j + 1] = 0;
             }
             fillValues[0] = 0.5f;
-            float * d_fillValues;
-            hipMalloc(&d_fillValues, srcDescPtr->c * sizeof(float));
-            hipMemcpy(d_fillValues, fillValues, srcDescPtr->c * sizeof(float), hipMemcpyHostToDevice);
             
             start_omp = omp_get_wtime();
             start = clock();
             if (ip_bitDepth == 2)
             {
-                rppt_slice_gpu(d_inputf32, srcDescPtr, d_outputf32, dstDescPtr, srcDimsTensor, anchor, shape, axes, fillValues, normalizedAnchor, normalizedShape, policyType, handle);
+                rppt_slice_gpu(d_inputf32, srcDescPtr, d_outputf32, dstDescPtr, srcDimsTensor, anchor, shape, fillValues, handle);
             }
             else
                 missingFuncFlag = 1;

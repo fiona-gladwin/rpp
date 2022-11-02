@@ -539,12 +539,8 @@ int main(int argc, char **argv)
         {
             test_case_name = "slice";
 
-            bool normalizedAnchor = false;
-            bool normalizedShape = false;
             Rpp32f fillValues[noOfAudioFiles];
-            Rpp32s axes = 0;
-            RpptOutOfBoundsPolicy policyType = RpptOutOfBoundsPolicy::PAD;
-            Rpp32s numDims = 1;
+            Rpp32s numDims = 2;
             Rpp32s srcDimsTensor[noOfAudioFiles * 2];
             Rpp32f anchor[noOfAudioFiles * numDims];
             Rpp32f shape[noOfAudioFiles * numDims];
@@ -564,7 +560,7 @@ int main(int argc, char **argv)
             start = clock();
             if (ip_bitDepth == 2)
             {
-                rppt_slice_host(inputf32, srcDescPtr, outputf32, dstDescPtr, srcDimsTensor, anchor, shape, axes, fillValues, normalizedAnchor, normalizedShape, policyType);
+                rppt_slice_host(inputf32, srcDescPtr, outputf32, dstDescPtr, srcDimsTensor, anchor, shape, fillValues);
             }
             else
                 missingFuncFlag = 1;
@@ -777,13 +773,9 @@ int main(int argc, char **argv)
         case 9:
         {
             test_case_name = "pad";
-            bool normalizedAnchor = false;
-            bool normalizedShape = false;
             Rpp32f anchor[noOfAudioFiles * 2];
             Rpp32f shape[noOfAudioFiles * 2];
             Rpp32f fillValues[noOfAudioFiles];
-            Rpp32s axes = 0;
-            RpptOutOfBoundsPolicy policyType = RpptOutOfBoundsPolicy::PAD;
             Rpp32s srcDimsTensor[noOfAudioFiles * 2];
 
             // Read source dimension
@@ -844,7 +836,7 @@ int main(int argc, char **argv)
             start = clock();
             if (ip_bitDepth == 2)
             {
-                rppt_slice_host(inputf32, srcDescPtr, outputf32, dstDescPtr, srcDimsTensor, anchor, shape, axes, fillValues, normalizedAnchor, normalizedShape, policyType);
+                rppt_slice_host(inputf32, srcDescPtr, outputf32, dstDescPtr, srcDimsTensor, anchor, shape, fillValues);
             }
             else
                 missingFuncFlag = 1;

@@ -120,11 +120,7 @@ RppStatus rppt_slice_host(RppPtr_t srcPtr,
                           Rpp32s *srcLengthTensor,
                           Rpp32f *anchorTensor,
                           Rpp32f *shapeTensor,
-                          Rpp32s axisMask,
-                          Rpp32f *fillValues,
-                          bool normalizedAnchor,
-                          bool normalizedShape,
-                          RpptOutOfBoundsPolicy policyType)
+                          Rpp32f *fillValues)
 {
     slice_host_tensor((Rpp32f*)srcPtr,
                       srcDescPtr,
@@ -133,11 +129,7 @@ RppStatus rppt_slice_host(RppPtr_t srcPtr,
                       srcLengthTensor,
                       anchorTensor,
                       shapeTensor,
-                      axisMask,
-                      fillValues,
-                      normalizedAnchor,
-                      normalizedShape,
-                      policyType);
+                      fillValues);
 
     return RPP_SUCCESS;
 }
