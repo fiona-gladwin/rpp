@@ -20,10 +20,10 @@ __global__ void slice_tensor(float *srcPtr,
         return;
     }
 
-    uint srcIdx = (id_z * srcStridesNH.x) + ((id_y + (uint)anchorTensor[stride]) * srcStridesNH.y) + (id_x + (uint)anchorTensor[stride + 1]);
-    uint dstIdx = (id_z * dstStridesNH.x) + (id_y * dstStridesNH.y) + id_x;
+    int srcIdx = (id_z * srcStridesNH.x) + ((id_y + (int)anchorTensor[stride]) * srcStridesNH.y) + (id_x + (int)anchorTensor[stride + 1]);
+    int dstIdx = (id_z * dstStridesNH.x) + (id_y * dstStridesNH.y) + id_x;
     
-    if(id_y >= srcLengthTensor[stride] || id_x >= srcLengthTensor[stride + 1]) {
+    if(id_y >= srcLengthTensor[stride] || id_x >= srcLengthTensor[stride + 1] || srcIdx < 0) {
         dstPtr[dstIdx] = fillValue;
     } else {
         dstPtr[dstIdx] = srcPtr[srcIdx];
