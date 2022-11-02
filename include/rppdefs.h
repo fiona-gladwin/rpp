@@ -251,13 +251,6 @@ typedef enum
 
 typedef enum
 {
-    PAD = 0,
-    TRIMTOSHAPE,
-    ERROR
-} RpptOutOfBoundsPolicy;
-
-typedef enum
-{
     SLANEY = 0,
     HTK,
 }RpptMelScaleFormula;

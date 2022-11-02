@@ -2,26 +2,6 @@
 #include "rpp_cpu_simd.hpp"
 #include "rpp_cpu_common.hpp"
 
-void applyPolicy(RpptOutOfBoundsPolicy policyType, Rpp32s *anchor, Rpp32s *sliceEnd, Rpp32s *srcBufferLength)
-{
-    switch (policyType)
-    {
-        case RpptOutOfBoundsPolicy::PAD:
-            break;
-        case RpptOutOfBoundsPolicy::TRIMTOSHAPE:
-            *anchor = std::min(std::max(*anchor, 0), *srcBufferLength);
-            *sliceEnd = std::min(std::max(*anchor + *sliceEnd, 0), *srcBufferLength);
-            break;
-        case RpptOutOfBoundsPolicy::ERROR:
-        default:
-            bool anchorCheck = (*anchor < 0) || (*anchor > *srcBufferLength);
-            bool shapeCheck = ((*anchor + *sliceEnd) < 0) || ((*anchor + *sliceEnd) > *srcBufferLength);
-            if(anchorCheck || shapeCheck)
-                std::cerr<<"Invalid values passed"<<"\n"; // TODO - Throw error when outOfBound values passed
-            break;
-    }
-}
-
 RppStatus slice_host_tensor(Rpp32f *srcPtr,
                             RpptDescPtr srcDescPtr,
                             Rpp32f *dstPtr,
