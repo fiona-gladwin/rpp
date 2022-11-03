@@ -473,13 +473,14 @@ int main(int argc, char **argv)
             Rpp32f anchor[noOfAudioFiles * numDims];
             Rpp32f shape[noOfAudioFiles * numDims];
 
-            for (i = 0, j = i * 2; i < noOfAudioFiles; i++)
+            for (i = 0, j = i * 2; i < noOfAudioFiles; i++, j += 2)
             {
                 srcDimsTensor[j] = srcLengthTensor[i];
                 srcDimsTensor[j + 1] = channelsTensor[i];
-                shape[j] =  dstDims[i].width = 20;
+                shape[j] =  dstDims[i].width = 200;
                 shape[j + 1] = dstDims[i].height = 1;
-                anchor[j] = anchor[j + 1] = 0;
+                anchor[j] = 100;
+                anchor[j + 1] = 0;
             }
             fillValues[0] = 0.5f;
             
@@ -493,8 +494,7 @@ int main(int argc, char **argv)
                 missingFuncFlag = 1;
 
             hipMemcpy(outputf32, d_outputf32, oBufferSizeInBytes_f32, hipMemcpyDeviceToHost);
-            
-            // verify_output(outputf32, dstDescPtr, dstDims, test_case_name, audioNames);
+            verify_output(outputf32, dstDescPtr, dstDims, test_case_name, audioNames);
             break;
         }
         default:

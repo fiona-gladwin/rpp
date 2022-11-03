@@ -66,15 +66,19 @@ void verify_output(Rpp32f *dstPtr, RpptDescPtr dstDescPtr, RpptImagePatchPtr dst
             {
                 ref_file>>ref_val;
                 out_val = dstPtrTemp[j];
+                // std::cerr << dstPtrTemp[j] << "\n";
                 bool invalid_comparision = ((out_val == 0.0f) && (ref_val != 0.0f));
                 if(!invalid_comparision && abs(out_val - ref_val) < 1e-2)
                     matched_indices += 1;
             }
             dstPtrRow += stride;
         }
+        std::cerr << "\n*******************************\n";
         ref_file.close();
-        if(matched_indices == (dstDims[batchcount].width * dstDims[batchcount].height) && matched_indices !=0)
+        if(matched_indices == (dstDims[batchcount].width * dstDims[batchcount].height) && matched_indices !=0) {
             file_match++;
+            std::cerr << "MATCH\n";   
+        }
     }
 
     std::cerr<<std::endl<<"Results for Test case: "<<test_case<<std::endl;
@@ -355,8 +359,8 @@ int main(int argc, char **argv)
     dstDescPtr->c = 1;
 
     // Optionally set w stride as a multiple of 8 for src
-    srcDescPtr->w = ((srcDescPtr->w / 8) * 8) + 8;
-    dstDescPtr->w = ((dstDescPtr->w / 8) * 8) + 8;
+    // srcDescPtr->w = ((srcDescPtr->w / 8) * 8) + 8;
+    // dstDescPtr->w = ((dstDescPtr->w / 8) * 8) + 8;
 
     // Set n/c/h/w strides for src/dst
     srcDescPtr->strides.nStride = srcDescPtr->c * srcDescPtr->w * srcDescPtr->h;
@@ -546,15 +550,16 @@ int main(int argc, char **argv)
             Rpp32f shape[noOfAudioFiles * numDims];
 
             // 1D slice arguments
-            for (i = 0; i < noOfAudioFiles; i++)
+            for (i = 0, j = i * 2; i < noOfAudioFiles; i++, j += 2)
             {
-                srcDimsTensor[2 * i] = srcLengthTensor[i];
-                srcDimsTensor[2 * i + 1] = 1;
-                shape[i] =  dstDims[i].width = 200;
-                dstDims[i].height = 1;
-                anchor[i] = 100;
-                fillValues[i] = 0.5f;
+                srcDimsTensor[j] = srcLengthTensor[i];
+                srcDimsTensor[j + 1] = 1;
+                shape[j] =  dstDims[i].width = 200;
+                shape[j + 1] = dstDims[i].height = 1;
+                anchor[j] = 100;
+                anchor[j + 1] = 0;
             }
+            fillValues[0] = 0.5f;
 
             start_omp = omp_get_wtime();
             start = clock();
