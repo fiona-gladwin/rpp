@@ -32,7 +32,13 @@ functionality_group_list = [
     "non_silent_region_detection",
     "to_decibels",
     "pre_emphasis_filter",
-    "down_mixing"
+    "down_mixing",
+    "slice",
+    "mel_filter_bank",
+    "spectrogram",
+    "resample",
+    "normalize",
+    "pad"
 ]
 
 for log_file in log_file_list:

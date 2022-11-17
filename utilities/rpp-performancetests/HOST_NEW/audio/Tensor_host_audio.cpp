@@ -344,8 +344,8 @@ int main(int argc, char **argv)
             case 0:
             {
                 test_case_name = "non_silent_region_detection";
-                Rpp32s detectedIndex[noOfAudioFiles];
-                Rpp32s detectionLength[noOfAudioFiles];
+                Rpp32f detectedIndex[noOfAudioFiles];
+                Rpp32f detectionLength[noOfAudioFiles];
                 Rpp32f cutOffDB = -60.0;
                 Rpp32s windowLength = 3;
                 Rpp32f referencePower = 0.0f;
