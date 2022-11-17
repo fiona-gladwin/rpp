@@ -77,10 +77,11 @@ RppStatus spectrogram_host_tensor(Rpp32f *srcPtr,
                                   Rpp32s power,
                                   Rpp32s windowLength,
                                   Rpp32s windowStep,
-                                  RpptSpectrogramLayout layout)
+                                  RpptSpectrogramLayout layout,
+                                  size_t internal_batch_size)
 {
 	omp_set_dynamic(0);
-#pragma omp parallel for num_threads(srcDescPtr->n)
+#pragma omp parallel for num_threads(internal_batch_size)
 	for (int batchCount = 0; batchCount < srcDescPtr->n; batchCount++)
 	{
         Rpp32f *srcPtrTemp = srcPtr + batchCount * srcDescPtr->strides.nStride;
