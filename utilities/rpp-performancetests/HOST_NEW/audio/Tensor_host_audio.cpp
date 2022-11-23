@@ -196,9 +196,9 @@ int main(int argc, char **argv)
     // Set maxLength
     char audioNames[noOfAudioFiles][1000];
 
-    // Set Height as 1 for src, dst
-    maxSrcHeight = 1;
-    maxDstHeight = 1;
+    // Set Width as 1 for src, dst
+    maxSrcWidth = 1;
+    maxDstWidth = 1;
 
     dr = opendir(src);
     while ((de = readdir(dr)) != NULL)
@@ -226,14 +226,15 @@ int main(int argc, char **argv)
         srcLengthTensor[count] = sfinfo.frames;
         channelsTensor[count] = sfinfo.channels;
 
-        srcDims[count].width = sfinfo.frames;
-        dstDims[count].width = sfinfo.frames;
-        srcDims[count].height = 1;
-        dstDims[count].height = 1;
+        srcDims[count].height = sfinfo.frames;
+        dstDims[count].height = sfinfo.frames;
+        srcDims[count].width = sfinfo.channels;
+        dstDims[count].width = sfinfo.channels;
 
-        maxSrcWidth = std::max(maxSrcWidth, srcLengthTensor[count]);
-        maxDstWidth = std::max(maxDstWidth, srcLengthTensor[count]);
-        maxChannels = std::max(maxChannels, channelsTensor[count]);
+        maxSrcHeight = std::max(maxSrcHeight, (int)srcDims[count].height);
+        maxDstHeight = std::max(maxDstHeight, (int)srcDims[count].height);
+        maxSrcWidth = std::max(maxSrcWidth, (int)srcDims[count].width);
+        maxDstWidth = std::max(maxDstWidth, (int)srcDims[count].width);
 
         // Close input
         sf_close (infile);
@@ -255,13 +256,13 @@ int main(int argc, char **argv)
     dstDescPtr->h = maxDstHeight;
 
     srcDescPtr->w = maxSrcWidth;
-    dstDescPtr->w = maxDstWidth;
-
-    srcDescPtr->c = maxChannels;
     if(test_case == 3)
-        dstDescPtr->c = 1;
+        dstDescPtr->w = 1;
     else
-        dstDescPtr->c = maxChannels;
+        dstDescPtr->w = maxDstWidth;
+
+    srcDescPtr->c = 1;
+    dstDescPtr->c = 1;
 
     // Optionally set w stride as a multiple of 8 for src
     // srcDescPtr->w = ((srcDescPtr->w / 8) * 8) + 8;
@@ -431,21 +432,23 @@ int main(int argc, char **argv)
                 Rpp32f anchor[noOfAudioFiles * numDims];
                 Rpp32f shape[noOfAudioFiles * numDims];
 
-                // 1D slice test
-                for (i = 0; i < noOfAudioFiles; i++)
+                // 1D slice arguments
+                for (i = 0, j = i * 2; i < noOfAudioFiles; i++, j += 2)
                 {
-                    srcDimsTensor[i] = srcLengthTensor[i];
-                    shape[i] =  dstDims[i].width = 200;
-                    dstDims[i].height = 1;
-                    anchor[i] = 100;
-                    fillValues[i] = 0.5f;
+                    srcDimsTensor[j] = srcLengthTensor[i];
+                    srcDimsTensor[j + 1] = 1;
+                    shape[j] =  dstDims[i].width = 200;
+                    shape[j + 1] = dstDims[i].height = 1;
+                    anchor[j] = 100;
+                    anchor[j + 1] = 0;
                 }
+                fillValues[0] = 0.5f;
 
                 start_omp = omp_get_wtime();
                 start = clock();
                 if (ip_bitDepth == 2)
                 {
-                    rppt_slice_host(inputf32, srcDescPtr, outputf32, dstDescPtr, srcLengthTensor, anchor, shape, fillValues);
+                    rppt_slice_host(inputf32, srcDescPtr, outputf32, dstDescPtr, srcDimsTensor, anchor, shape, fillValues);
                 }
                 else
                     missingFuncFlag = 1;
