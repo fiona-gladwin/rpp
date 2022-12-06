@@ -158,6 +158,20 @@ inline void copy_roi(RppiROI roiPoints, rpp::Handle& handle)
 #endif // backend
 }
 
+inline void copy_param_tensor_roi(RpptROIPtr roiTensorPtr, rpp::Handle& handle)
+{
+#ifdef HIP_COMPILE
+    hipMemcpy(handle.GetInitHandle()->mem.mgpu.tensorROI, roiTensorPtr, handle.GetBatchSize()  * sizeof(RpptROI), hipMemcpyHostToDevice);
+#endif
+}
+
+inline void copy_param_image_patch(RpptImagePatchPtr imagePatchPtr, rpp::Handle& handle)
+{
+#ifdef HIP_COMPILE
+    hipMemcpy(handle.GetInitHandle()->mem.mgpu.tensorImagePatch, imagePatchPtr, handle.GetBatchSize()  * sizeof(RpptImagePatch), hipMemcpyHostToDevice);
+#endif
+}
+
 inline void copy_param_float(float *param, rpp::Handle& handle, Rpp32u paramIndex)
 {
     for(int i = 0; i < handle.GetBatchSize(); i++)

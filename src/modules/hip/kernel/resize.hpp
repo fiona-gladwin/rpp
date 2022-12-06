@@ -718,14 +718,12 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                  RpptDescPtr srcDescPtr,
                                  T *dstPtr,
                                  RpptDescPtr dstDescPtr,
-                                 RpptImagePatchPtr dstImgSize,
                                  RpptInterpolationType interpolationType,
-                                 RpptROIPtr roiTensorPtrSrc,
                                  RpptRoiType roiType,
                                  rpp::Handle& handle)
 {
     if (roiType == RpptRoiType::XYWH)
-        hip_exec_roi_converison_xywh_to_ltrb(roiTensorPtrSrc, handle);
+        hip_exec_roi_converison_xywh_to_ltrb(handle.GetInitHandle()->mem.mgpu.tensorROI, handle);
 
     if (interpolationType == RpptInterpolationType::NEAREST_NEIGHBOR)
     {
@@ -746,8 +744,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                             make_uint2(srcDescPtr->strides.nStride, srcDescPtr->strides.hStride),
                             dstPtr,
                             make_uint2(dstDescPtr->strides.nStride, dstDescPtr->strides.hStride),
-                            dstImgSize,
-                            roiTensorPtrSrc);
+                            handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                            handle.GetInitHandle()->mem.mgpu.tensorROI);
         }
         else if ((srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
         {
@@ -761,8 +759,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                             dstPtr,
                             make_uint3(dstDescPtr->strides.nStride, dstDescPtr->strides.cStride, dstDescPtr->strides.hStride),
                             dstDescPtr->c,
-                            dstImgSize,
-                            roiTensorPtrSrc);
+                            handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                            handle.GetInitHandle()->mem.mgpu.tensorROI);
         }
         else if ((srcDescPtr->c == 3) && (dstDescPtr->c == 3))
         {
@@ -777,8 +775,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                 make_uint2(srcDescPtr->strides.nStride, srcDescPtr->strides.hStride),
                                 dstPtr,
                                 make_uint3(dstDescPtr->strides.nStride, dstDescPtr->strides.cStride, dstDescPtr->strides.hStride),
-                                dstImgSize,
-                                roiTensorPtrSrc);
+                                handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                                handle.GetInitHandle()->mem.mgpu.tensorROI);
             }
             else if ((srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NHWC))
             {
@@ -792,8 +790,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                 make_uint3(srcDescPtr->strides.nStride, srcDescPtr->strides.cStride, srcDescPtr->strides.hStride),
                                 dstPtr,
                                 make_uint2(dstDescPtr->strides.nStride, dstDescPtr->strides.hStride),
-                                dstImgSize,
-                                roiTensorPtrSrc);
+                                handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                                handle.GetInitHandle()->mem.mgpu.tensorROI);
             }
         }
     }
@@ -816,8 +814,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                make_uint2(srcDescPtr->strides.nStride, srcDescPtr->strides.hStride),
                                dstPtr,
                                make_uint2(dstDescPtr->strides.nStride, dstDescPtr->strides.hStride),
-                               dstImgSize,
-                               roiTensorPtrSrc);
+                               handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                               handle.GetInitHandle()->mem.mgpu.tensorROI);
         }
         else if ((srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
         {
@@ -831,8 +829,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                dstPtr,
                                make_uint3(dstDescPtr->strides.nStride, dstDescPtr->strides.cStride, dstDescPtr->strides.hStride),
                                dstDescPtr->c,
-                               dstImgSize,
-                               roiTensorPtrSrc);
+                               handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                               handle.GetInitHandle()->mem.mgpu.tensorROI);
         }
         else if ((srcDescPtr->c == 3) && (dstDescPtr->c == 3))
         {
@@ -847,8 +845,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                    make_uint2(srcDescPtr->strides.nStride, srcDescPtr->strides.hStride),
                                    dstPtr,
                                    make_uint3(dstDescPtr->strides.nStride, dstDescPtr->strides.cStride, dstDescPtr->strides.hStride),
-                                   dstImgSize,
-                                   roiTensorPtrSrc);
+                                   handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                                   handle.GetInitHandle()->mem.mgpu.tensorROI);
             }
             else if ((srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NHWC))
             {
@@ -861,8 +859,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                    make_uint3(srcDescPtr->strides.nStride, srcDescPtr->strides.cStride, srcDescPtr->strides.hStride),
                                    dstPtr,
                                    make_uint2(dstDescPtr->strides.nStride, dstDescPtr->strides.hStride),
-                                   dstImgSize,
-                                   roiTensorPtrSrc);
+                                   handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                                   handle.GetInitHandle()->mem.mgpu.tensorROI);
             }
         }
     }
@@ -886,8 +884,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                make_uint2(srcDescPtr->strides.nStride, srcDescPtr->strides.hStride),
                                dstPtr,
                                make_uint2(dstDescPtr->strides.nStride, dstDescPtr->strides.hStride),
-                               dstImgSize,
-                               roiTensorPtrSrc,
+                               handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                               handle.GetInitHandle()->mem.mgpu.tensorROI,
                                interpolationType);
         }
         else if ((srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
@@ -903,8 +901,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                    make_uint3(srcDescPtr->strides.nStride, srcDescPtr->strides.cStride, srcDescPtr->strides.hStride),
                                    dstPtr,
                                    make_uint3(dstDescPtr->strides.nStride, dstDescPtr->strides.cStride, dstDescPtr->strides.hStride),
-                                   dstImgSize,
-                                   roiTensorPtrSrc,
+                                   handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                                   handle.GetInitHandle()->mem.mgpu.tensorROI,
                                    interpolationType);
             }
             else if (srcDescPtr->c == 1)
@@ -918,8 +916,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                    make_uint3(srcDescPtr->strides.nStride, srcDescPtr->strides.cStride, srcDescPtr->strides.hStride),
                                    dstPtr,
                                    make_uint3(dstDescPtr->strides.nStride, dstDescPtr->strides.cStride, dstDescPtr->strides.hStride),
-                                   dstImgSize,
-                                   roiTensorPtrSrc,
+                                   handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                                   handle.GetInitHandle()->mem.mgpu.tensorROI,
                                    interpolationType);
             }
         }
@@ -936,8 +934,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                     make_uint2(srcDescPtr->strides.nStride, srcDescPtr->strides.hStride),
                                     dstPtr,
                                     make_uint3(dstDescPtr->strides.nStride, dstDescPtr->strides.cStride, dstDescPtr->strides.hStride),
-                                    dstImgSize,
-                                    roiTensorPtrSrc,
+                                    handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                                    handle.GetInitHandle()->mem.mgpu.tensorROI,
                                     interpolationType);
             }
             else if ((srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NHWC))
@@ -951,8 +949,8 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
                                    make_uint3(srcDescPtr->strides.nStride, srcDescPtr->strides.cStride, srcDescPtr->strides.hStride),
                                    dstPtr,
                                    make_uint2(dstDescPtr->strides.nStride, dstDescPtr->strides.hStride),
-                                   dstImgSize,
-                                   roiTensorPtrSrc,
+                                   handle.GetInitHandle()->mem.mgpu.tensorImagePatch,
+                                   handle.GetInitHandle()->mem.mgpu.tensorROI,
                                    interpolationType);
             }
         }

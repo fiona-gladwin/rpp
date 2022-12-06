@@ -632,6 +632,8 @@ typedef struct
     Rpp64u* dstBatchIndex;
     Rpp32u* inc;
     Rpp32u* dstInc;
+    RpptROI *tensorROI;
+    RpptImagePatch *tensorImagePatch;
 } memGPU;
 
 typedef struct
