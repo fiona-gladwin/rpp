@@ -1243,23 +1243,20 @@ int main(int argc, char **argv)
             roiTypeSrc = RpptRoiType::LTRB;
             roiTypeDst = RpptRoiType::LTRB;*/
 
-            hipMemcpy(d_roiTensorPtrSrc, roiTensorPtrSrc, images * sizeof(RpptROI), hipMemcpyHostToDevice);
-            hipMemcpy(d_dstImgSizes, dstImgSizes, images * sizeof(RpptImagePatch), hipMemcpyHostToDevice);
-
             start = clock();
 
             if (ip_bitDepth == 0)
-                rppt_resize_gpu(d_input, srcDescPtr, d_output, dstDescPtr, d_dstImgSizes, interpolationType, d_roiTensorPtrSrc, roiTypeSrc, handle);
+                rppt_resize_gpu(d_input, srcDescPtr, d_output, dstDescPtr, dstImgSizes, interpolationType, roiTensorPtrSrc, roiTypeSrc, handle);
             else if (ip_bitDepth == 1)
-                rppt_resize_gpu(d_inputf16, srcDescPtr, d_outputf16, dstDescPtr, d_dstImgSizes, interpolationType, d_roiTensorPtrSrc, roiTypeSrc, handle);
+                rppt_resize_gpu(d_inputf16, srcDescPtr, d_outputf16, dstDescPtr, dstImgSizes, interpolationType, roiTensorPtrSrc, roiTypeSrc, handle);
             else if (ip_bitDepth == 2)
-                rppt_resize_gpu(d_inputf32, srcDescPtr, d_outputf32, dstDescPtr, d_dstImgSizes, interpolationType, d_roiTensorPtrSrc, roiTypeSrc, handle);
+                rppt_resize_gpu(d_inputf32, srcDescPtr, d_outputf32, dstDescPtr, dstImgSizes, interpolationType, roiTensorPtrSrc, roiTypeSrc, handle);
             else if (ip_bitDepth == 3)
                 missingFuncFlag = 1;
             else if (ip_bitDepth == 4)
                 missingFuncFlag = 1;
             else if (ip_bitDepth == 5)
-                rppt_resize_gpu(d_inputi8, srcDescPtr, d_outputi8, dstDescPtr, d_dstImgSizes, interpolationType, d_roiTensorPtrSrc, roiTypeSrc, handle);
+                rppt_resize_gpu(d_inputi8, srcDescPtr, d_outputi8, dstDescPtr, dstImgSizes, interpolationType, roiTensorPtrSrc, roiTypeSrc, handle);
             else if (ip_bitDepth == 6)
                 missingFuncFlag = 1;
             else
