@@ -1519,18 +1519,18 @@ int main(int argc, char **argv)
         tableDescPtr->strides.hStride = srcDescPtr->w;
         tableDescPtr->strides.wStride = tableDescPtr->strides.cStride = 1;
         
-        Rpp32u *rowRemapTable = (Rpp32u*) calloc(ioBufferSize, sizeof(Rpp32u));
-        Rpp32u *colRemapTable = (Rpp32u*) calloc(ioBufferSize, sizeof(Rpp32u));
+        Rpp32f *rowRemapTable = (Rpp32f*) calloc(tableDescPtr->strides.nStride * images, sizeof(Rpp32f));
+        Rpp32f *colRemapTable = (Rpp32f*) calloc(tableDescPtr->strides.nStride * images, sizeof(Rpp32f));
 
         for (Rpp32u count = 0; count < images; count++)
         {
-            Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+            Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
             rowRemapTableTemp = rowRemapTable + count * tableDescPtr->strides.nStride;
             colRemapTableTemp = colRemapTable + count * tableDescPtr->strides.nStride;
             Rpp32u halfWidth = roiTensorPtrSrc[count].xywhROI.roiWidth / 2;
             for (Rpp32u i = 0; i < roiTensorPtrSrc[count].xywhROI.roiHeight; i++)
             {
-                Rpp32u *rowRemapTableTempRow, *colRemapTableTempRow;
+                Rpp32f *rowRemapTableTempRow, *colRemapTableTempRow;
                 rowRemapTableTempRow = rowRemapTableTemp + i * tableDescPtr->strides.hStride;
                 colRemapTableTempRow = colRemapTableTemp + i * tableDescPtr->strides.hStride;
                 Rpp32u j = 0;

@@ -6,8 +6,8 @@ RppStatus remap_u8_u8_host_tensor(Rpp8u *srcPtr,
                                   RpptDescPtr srcDescPtr,
                                   Rpp8u *dstPtr,
                                   RpptDescPtr dstDescPtr,
-                                  Rpp32u *rowRemapTable,
-                                  Rpp32u *colRemapTable,
+                                  Rpp32f *rowRemapTable,
+                                  Rpp32f *colRemapTable,
                                   RpptDescPtr remapTableDescPtr,
                                   RpptROIPtr roiTensorPtrSrc,
                                   RpptRoiType roiType,
@@ -32,7 +32,7 @@ omp_set_dynamic(0);
         srcPtrChannel = srcPtrImage + (roi.xywhROI.xy.y * srcDescPtr->strides.hStride) + (roi.xywhROI.xy.x * layoutParams.bufferMultiplier);
         dstPtrChannel = dstPtrImage;
 
-        Rpp32u *rowRemapTableImage, *colRemapTableImage;
+        Rpp32f *rowRemapTableImage, *colRemapTableImage;
         rowRemapTableImage = rowRemapTable + batchCount * remapTableDescPtr->strides.nStride;
         colRemapTableImage = colRemapTable + batchCount * remapTableDescPtr->strides.nStride;
         Rpp32u alignedLength = roi.xywhROI.roiWidth & ~3;   // Align dst width to process 4 dst pixels per iteration
@@ -54,7 +54,7 @@ omp_set_dynamic(0);
                 dstPtrTempR = dstPtrRowR;
                 dstPtrTempG = dstPtrRowG;
                 dstPtrTempB = dstPtrRowB;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -102,7 +102,7 @@ omp_set_dynamic(0);
             {
                 Rpp8u *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -144,7 +144,7 @@ omp_set_dynamic(0);
             {
                 Rpp8u *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -184,7 +184,7 @@ omp_set_dynamic(0);
             {
                 Rpp8u *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -237,8 +237,8 @@ RppStatus remap_f32_f32_host_tensor(Rpp32f *srcPtr,
                                     RpptDescPtr srcDescPtr,
                                     Rpp32f *dstPtr,
                                     RpptDescPtr dstDescPtr,
-                                    Rpp32u *rowRemapTable,
-                                    Rpp32u *colRemapTable,
+                                    Rpp32f *rowRemapTable,
+                                    Rpp32f *colRemapTable,
                                     RpptDescPtr remapTableDescPtr,
                                     RpptROIPtr roiTensorPtrSrc,
                                     RpptRoiType roiType,
@@ -263,7 +263,7 @@ omp_set_dynamic(0);
         srcPtrChannel = srcPtrImage + (roi.xywhROI.xy.y * srcDescPtr->strides.hStride) + (roi.xywhROI.xy.x * layoutParams.bufferMultiplier);
         dstPtrChannel = dstPtrImage;
 
-        Rpp32u *rowRemapTableImage, *colRemapTableImage;
+        Rpp32f *rowRemapTableImage, *colRemapTableImage;
         rowRemapTableImage = rowRemapTable + batchCount * remapTableDescPtr->strides.nStride;
         colRemapTableImage = colRemapTable + batchCount * remapTableDescPtr->strides.nStride;
         Rpp32u alignedLength = roi.xywhROI.roiWidth & ~3;   // Align dst width to process 4 dst pixels per iteration
@@ -285,7 +285,7 @@ omp_set_dynamic(0);
                 dstPtrTempR = dstPtrRowR;
                 dstPtrTempG = dstPtrRowG;
                 dstPtrTempB = dstPtrRowB;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -333,7 +333,7 @@ omp_set_dynamic(0);
             {
                 Rpp32f *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -375,7 +375,7 @@ omp_set_dynamic(0);
             {
                 Rpp32f *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -406,7 +406,7 @@ omp_set_dynamic(0);
             {
                 Rpp32f *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -459,8 +459,8 @@ RppStatus remap_i8_i8_host_tensor(Rpp8s *srcPtr,
                                   RpptDescPtr srcDescPtr,
                                   Rpp8s *dstPtr,
                                   RpptDescPtr dstDescPtr,
-                                  Rpp32u *rowRemapTable,
-                                  Rpp32u *colRemapTable,
+                                  Rpp32f *rowRemapTable,
+                                  Rpp32f *colRemapTable,
                                   RpptDescPtr remapTableDescPtr,
                                   RpptROIPtr roiTensorPtrSrc,
                                   RpptRoiType roiType,
@@ -485,7 +485,7 @@ omp_set_dynamic(0);
         srcPtrChannel = srcPtrImage + (roi.xywhROI.xy.y * srcDescPtr->strides.hStride) + (roi.xywhROI.xy.x * layoutParams.bufferMultiplier);
         dstPtrChannel = dstPtrImage;
 
-        Rpp32u *rowRemapTableImage, *colRemapTableImage;
+        Rpp32f *rowRemapTableImage, *colRemapTableImage;
         rowRemapTableImage = rowRemapTable + batchCount * remapTableDescPtr->strides.nStride;
         colRemapTableImage = colRemapTable + batchCount * remapTableDescPtr->strides.nStride;
         Rpp32u alignedLength = roi.xywhROI.roiWidth & ~3;   // Align dst width to process 4 dst pixels per iteration
@@ -507,7 +507,7 @@ omp_set_dynamic(0);
                 dstPtrTempR = dstPtrRowR;
                 dstPtrTempG = dstPtrRowG;
                 dstPtrTempB = dstPtrRowB;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -555,7 +555,7 @@ omp_set_dynamic(0);
             {
                 Rpp8s *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -597,7 +597,7 @@ omp_set_dynamic(0);
             {
                 Rpp8s *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -637,7 +637,7 @@ omp_set_dynamic(0);
             {
                 Rpp8s *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -690,8 +690,8 @@ RppStatus remap_f16_f16_host_tensor(Rpp16f *srcPtr,
                                     RpptDescPtr srcDescPtr,
                                     Rpp16f *dstPtr,
                                     RpptDescPtr dstDescPtr,
-                                    Rpp32u *rowRemapTable,
-                                    Rpp32u *colRemapTable,
+                                    Rpp32f *rowRemapTable,
+                                    Rpp32f *colRemapTable,
                                     RpptDescPtr remapTableDescPtr,
                                     RpptROIPtr roiTensorPtrSrc,
                                     RpptRoiType roiType,
@@ -716,7 +716,7 @@ omp_set_dynamic(0);
         srcPtrChannel = srcPtrImage + (roi.xywhROI.xy.y * srcDescPtr->strides.hStride) + (roi.xywhROI.xy.x * layoutParams.bufferMultiplier);
         dstPtrChannel = dstPtrImage;
 
-        Rpp32u *rowRemapTableImage, *colRemapTableImage;
+        Rpp32f *rowRemapTableImage, *colRemapTableImage;
         rowRemapTableImage = rowRemapTable + batchCount * remapTableDescPtr->strides.nStride;
         colRemapTableImage = colRemapTable + batchCount * remapTableDescPtr->strides.nStride;
 
@@ -738,7 +738,7 @@ omp_set_dynamic(0);
                 dstPtrTempR = dstPtrRowR;
                 dstPtrTempG = dstPtrRowG;
                 dstPtrTempB = dstPtrRowB;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
@@ -774,7 +774,7 @@ omp_set_dynamic(0);
             {
                 Rpp16f *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
-                Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+                Rpp32f *rowRemapTableTemp, *colRemapTableTemp;
                 rowRemapTableTemp = rowRemapTableImage;
                 colRemapTableTemp = colRemapTableImage;
 
