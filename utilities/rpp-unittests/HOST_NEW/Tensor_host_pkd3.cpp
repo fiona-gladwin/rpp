@@ -1433,34 +1433,46 @@ int main(int argc, char **argv)
         roiTypeSrc = RpptRoiType::LTRB;
         roiTypeDst = RpptRoiType::LTRB;*/
         
+        RpptDescPtr tableDescPtr;
+        RpptDesc tableDesc;
+
+        tableDescPtr = &tableDesc;
+        tableDesc = srcDesc;
+        tableDescPtr->c = 1;
+        tableDescPtr->strides.nStride = srcDescPtr->h * srcDescPtr->w;
+        tableDescPtr->strides.hStride = srcDescPtr->w;
+        tableDescPtr->strides.wStride = tableDescPtr->strides.cStride = 1;
+        
         Rpp32u *rowRemapTable = (Rpp32u*) calloc(ioBufferSize, sizeof(Rpp32u));
         Rpp32u *colRemapTable = (Rpp32u*) calloc(ioBufferSize, sizeof(Rpp32u));
 
-        Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-        rowRemapTableTemp = rowRemapTable;
-        colRemapTableTemp = colRemapTable;
-
         for (Rpp32u count = 0; count < images; count++)
         {
+            Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
+            rowRemapTableTemp = rowRemapTable + count * tableDescPtr->strides.nStride;
+            colRemapTableTemp = colRemapTable + count * tableDescPtr->strides.nStride;
             Rpp32u halfWidth = roiTensorPtrSrc[count].xywhROI.roiWidth / 2;
             for (Rpp32u i = 0; i < roiTensorPtrSrc[count].xywhROI.roiHeight; i++)
             {
+                Rpp32u *rowRemapTableTempRow, *colRemapTableTempRow;
+                rowRemapTableTempRow = rowRemapTableTemp + i * tableDescPtr->strides.hStride;
+                colRemapTableTempRow = colRemapTableTemp + i * tableDescPtr->strides.hStride;
                 Rpp32u j = 0;
                 for (; j < halfWidth; j++)
                 {
-                    *rowRemapTableTemp = i;
-                    *colRemapTableTemp = halfWidth - j;
+                    *rowRemapTableTempRow = i;
+                    *colRemapTableTempRow = halfWidth - j;
 
-                    rowRemapTableTemp++;
-                    colRemapTableTemp++;
+                    rowRemapTableTempRow++;
+                    colRemapTableTempRow++;
                 }
                 for (; j < roiTensorPtrSrc[count].xywhROI.roiWidth; j++)
                 {
-                    *rowRemapTableTemp = i;
-                    *colRemapTableTemp = j;
+                    *rowRemapTableTempRow = i;
+                    *colRemapTableTempRow = j;
 
-                    rowRemapTableTemp++;
-                    colRemapTableTemp++;
+                    rowRemapTableTempRow++;
+                    colRemapTableTempRow++;
                 }
             }
         }
@@ -1468,17 +1480,17 @@ int main(int argc, char **argv)
         start_omp = omp_get_wtime();
         start = clock();
         if (ip_bitDepth == 0)
-            rppt_remap_host(input, srcDescPtr, output, dstDescPtr, rowRemapTable, colRemapTable, roiTensorPtrSrc, roiTypeSrc, handle);
+            rppt_remap_host(input, srcDescPtr, output, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, roiTensorPtrSrc, roiTypeSrc, handle);
         else if (ip_bitDepth == 1)
-            rppt_remap_host(inputf16, srcDescPtr, outputf16, dstDescPtr, rowRemapTable, colRemapTable, roiTensorPtrSrc, roiTypeSrc, handle);
+            rppt_remap_host(inputf16, srcDescPtr, outputf16, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, roiTensorPtrSrc, roiTypeSrc, handle);
         else if (ip_bitDepth == 2)
-            rppt_remap_host(inputf32, srcDescPtr, outputf32, dstDescPtr, rowRemapTable, colRemapTable, roiTensorPtrSrc, roiTypeSrc, handle);
+            rppt_remap_host(inputf32, srcDescPtr, outputf32, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, roiTensorPtrSrc, roiTypeSrc, handle);
         else if (ip_bitDepth == 3)
             missingFuncFlag = 1;
         else if (ip_bitDepth == 4)
             missingFuncFlag = 1;
         else if (ip_bitDepth == 5)
-            rppt_remap_host(inputi8, srcDescPtr, outputi8, dstDescPtr, rowRemapTable, colRemapTable, roiTensorPtrSrc, roiTypeSrc, handle);
+            rppt_remap_host(inputi8, srcDescPtr, outputi8, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, roiTensorPtrSrc, roiTypeSrc, handle);
         else if (ip_bitDepth == 6)
             missingFuncFlag = 1;
         else

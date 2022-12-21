@@ -8,6 +8,7 @@ RppStatus remap_u8_u8_host_tensor(Rpp8u *srcPtr,
                                   RpptDescPtr dstDescPtr,
                                   Rpp32u *rowRemapTable,
                                   Rpp32u *colRemapTable,
+                                  RpptDescPtr remapTableDescPtr,
                                   RpptROIPtr roiTensorPtrSrc,
                                   RpptRoiType roiType,
                                   RppLayoutParams layoutParams)
@@ -32,8 +33,8 @@ omp_set_dynamic(0);
         dstPtrChannel = dstPtrImage;
 
         Rpp32u *rowRemapTableImage, *colRemapTableImage;
-        rowRemapTableImage = rowRemapTable + (roi.xywhROI.roiWidth * roi.xywhROI.roiHeight * batchCount);
-        colRemapTableImage = colRemapTable + (roi.xywhROI.roiWidth * roi.xywhROI.roiHeight * batchCount);
+        rowRemapTableImage = rowRemapTable + batchCount * remapTableDescPtr->strides.nStride;
+        colRemapTableImage = colRemapTable + batchCount * remapTableDescPtr->strides.nStride;
         Rpp32u alignedLength = roi.xywhROI.roiWidth & ~3;   // Align dst width to process 4 dst pixels per iteration
         Rpp32s vectorIncrement = 4;
         Rpp32s vectorIncrementPkd = 12;
@@ -54,8 +55,8 @@ omp_set_dynamic(0);
                 dstPtrTempG = dstPtrRowG;
                 dstPtrTempB = dstPtrRowB;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += vectorIncrement)
@@ -82,6 +83,8 @@ omp_set_dynamic(0);
                 dstPtrRowR += dstDescPtr->strides.hStride;
                 dstPtrRowG += dstDescPtr->strides.hStride;
                 dstPtrRowB += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
 
@@ -100,8 +103,8 @@ omp_set_dynamic(0);
                 Rpp8u *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += vectorIncrement)
@@ -126,6 +129,8 @@ omp_set_dynamic(0);
                     colRemapTableTemp++;
                 }
                 dstPtrRow += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
 
@@ -140,8 +145,8 @@ omp_set_dynamic(0);
                 Rpp8u *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += vectorIncrement)
@@ -164,6 +169,8 @@ omp_set_dynamic(0);
                     colRemapTableTemp++;
                 }
                 dstPtrRow += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
 
@@ -178,8 +185,8 @@ omp_set_dynamic(0);
                 Rpp8u *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += vectorIncrement)
@@ -217,6 +224,8 @@ omp_set_dynamic(0);
                     colRemapTableTemp++;
                 }
                 dstPtrRow += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
     }
@@ -230,6 +239,7 @@ RppStatus remap_f32_f32_host_tensor(Rpp32f *srcPtr,
                                     RpptDescPtr dstDescPtr,
                                     Rpp32u *rowRemapTable,
                                     Rpp32u *colRemapTable,
+                                    RpptDescPtr remapTableDescPtr,
                                     RpptROIPtr roiTensorPtrSrc,
                                     RpptRoiType roiType,
                                     RppLayoutParams layoutParams)
@@ -254,8 +264,8 @@ omp_set_dynamic(0);
         dstPtrChannel = dstPtrImage;
 
         Rpp32u *rowRemapTableImage, *colRemapTableImage;
-        rowRemapTableImage = rowRemapTable + (roi.xywhROI.roiWidth * roi.xywhROI.roiHeight * batchCount);
-        colRemapTableImage = colRemapTable + (roi.xywhROI.roiWidth * roi.xywhROI.roiHeight * batchCount);
+        rowRemapTableImage = rowRemapTable + batchCount * remapTableDescPtr->strides.nStride;
+        colRemapTableImage = colRemapTable + batchCount * remapTableDescPtr->strides.nStride;
         Rpp32u alignedLength = roi.xywhROI.roiWidth & ~3;   // Align dst width to process 4 dst pixels per iteration
         Rpp32s vectorIncrement = 4;
         Rpp32s vectorIncrementPkd = 12;
@@ -276,8 +286,8 @@ omp_set_dynamic(0);
                 dstPtrTempG = dstPtrRowG;
                 dstPtrTempB = dstPtrRowB;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += vectorIncrement)
@@ -304,6 +314,8 @@ omp_set_dynamic(0);
                 dstPtrRowR += dstDescPtr->strides.hStride;
                 dstPtrRowG += dstDescPtr->strides.hStride;
                 dstPtrRowB += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
 
@@ -322,8 +334,8 @@ omp_set_dynamic(0);
                 Rpp32f *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += vectorIncrement)
@@ -348,6 +360,8 @@ omp_set_dynamic(0);
                     colRemapTableTemp++;
                 }
                 dstPtrRow += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
 
@@ -362,8 +376,8 @@ omp_set_dynamic(0);
                 Rpp32f *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < roi.xywhROI.roiWidth; vectorLoopCount++)
@@ -377,6 +391,8 @@ omp_set_dynamic(0);
                     colRemapTableTemp++;
                 }
                 dstPtrRow += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
 
@@ -391,8 +407,8 @@ omp_set_dynamic(0);
                 Rpp32f *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += vectorIncrement)
@@ -430,6 +446,8 @@ omp_set_dynamic(0);
                     colRemapTableTemp++;
                 }
                 dstPtrRow += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
     }
@@ -443,6 +461,7 @@ RppStatus remap_i8_i8_host_tensor(Rpp8s *srcPtr,
                                   RpptDescPtr dstDescPtr,
                                   Rpp32u *rowRemapTable,
                                   Rpp32u *colRemapTable,
+                                  RpptDescPtr remapTableDescPtr,
                                   RpptROIPtr roiTensorPtrSrc,
                                   RpptRoiType roiType,
                                   RppLayoutParams layoutParams)
@@ -467,8 +486,8 @@ omp_set_dynamic(0);
         dstPtrChannel = dstPtrImage;
 
         Rpp32u *rowRemapTableImage, *colRemapTableImage;
-        rowRemapTableImage = rowRemapTable + (roi.xywhROI.roiWidth * roi.xywhROI.roiHeight * batchCount);
-        colRemapTableImage = colRemapTable + (roi.xywhROI.roiWidth * roi.xywhROI.roiHeight * batchCount);
+        rowRemapTableImage = rowRemapTable + batchCount * remapTableDescPtr->strides.nStride;
+        colRemapTableImage = colRemapTable + batchCount * remapTableDescPtr->strides.nStride;
         Rpp32u alignedLength = roi.xywhROI.roiWidth & ~3;   // Align dst width to process 4 dst pixels per iteration
         Rpp32s vectorIncrement = 4;
         Rpp32s vectorIncrementPkd = 12;
@@ -489,8 +508,8 @@ omp_set_dynamic(0);
                 dstPtrTempG = dstPtrRowG;
                 dstPtrTempB = dstPtrRowB;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += vectorIncrement)
@@ -517,6 +536,8 @@ omp_set_dynamic(0);
                 dstPtrRowR += dstDescPtr->strides.hStride;
                 dstPtrRowG += dstDescPtr->strides.hStride;
                 dstPtrRowB += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
 
@@ -535,8 +556,8 @@ omp_set_dynamic(0);
                 Rpp8s *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += vectorIncrement)
@@ -561,6 +582,8 @@ omp_set_dynamic(0);
                     colRemapTableTemp++;
                 }
                 dstPtrRow += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
 
@@ -575,8 +598,8 @@ omp_set_dynamic(0);
                 Rpp8s *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += vectorIncrement)
@@ -599,6 +622,8 @@ omp_set_dynamic(0);
                     colRemapTableTemp++;
                 }
                 dstPtrRow += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
 
@@ -613,8 +638,8 @@ omp_set_dynamic(0);
                 Rpp8s *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < alignedLength; vectorLoopCount += vectorIncrement)
@@ -652,6 +677,8 @@ omp_set_dynamic(0);
                     colRemapTableTemp++;
                 }
                 dstPtrRow += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
     }
@@ -665,6 +692,7 @@ RppStatus remap_f16_f16_host_tensor(Rpp16f *srcPtr,
                                     RpptDescPtr dstDescPtr,
                                     Rpp32u *rowRemapTable,
                                     Rpp32u *colRemapTable,
+                                    RpptDescPtr remapTableDescPtr,
                                     RpptROIPtr roiTensorPtrSrc,
                                     RpptRoiType roiType,
                                     RppLayoutParams layoutParams)
@@ -689,8 +717,8 @@ omp_set_dynamic(0);
         dstPtrChannel = dstPtrImage;
 
         Rpp32u *rowRemapTableImage, *colRemapTableImage;
-        rowRemapTableImage = rowRemapTable + (roi.xywhROI.roiWidth * roi.xywhROI.roiHeight * batchCount);
-        colRemapTableImage = colRemapTable + (roi.xywhROI.roiWidth * roi.xywhROI.roiHeight * batchCount);
+        rowRemapTableImage = rowRemapTable + batchCount * remapTableDescPtr->strides.nStride;
+        colRemapTableImage = colRemapTable + batchCount * remapTableDescPtr->strides.nStride;
 
         // Remap with 3 channel inputs and outputs
         if (srcDescPtr->c == 3 && dstDescPtr->c == 3)
@@ -711,8 +739,8 @@ omp_set_dynamic(0);
                 dstPtrTempG = dstPtrRowG;
                 dstPtrTempB = dstPtrRowB;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < roi.xywhROI.roiWidth; vectorLoopCount++)
@@ -730,6 +758,8 @@ omp_set_dynamic(0);
                 dstPtrRowR += dstDescPtr->strides.hStride;
                 dstPtrRowG += dstDescPtr->strides.hStride;
                 dstPtrRowB += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
 
@@ -745,8 +775,8 @@ omp_set_dynamic(0);
                 Rpp16f *dstPtrTemp;
                 dstPtrTemp = dstPtrRow;
                 Rpp32u *rowRemapTableTemp, *colRemapTableTemp;
-                rowRemapTableTemp = rowRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
-                colRemapTableTemp = colRemapTableImage + (dstLocRow * roi.xywhROI.roiWidth);
+                rowRemapTableTemp = rowRemapTableImage;
+                colRemapTableTemp = colRemapTableImage;
 
                 int vectorLoopCount = 0;
                 for (; vectorLoopCount < roi.xywhROI.roiWidth; vectorLoopCount++)
@@ -757,6 +787,8 @@ omp_set_dynamic(0);
                     colRemapTableTemp++;
                 }
                 dstPtrRow += dstDescPtr->strides.hStride;
+                rowRemapTableImage += remapTableDescPtr->strides.hStride;
+                colRemapTableImage += remapTableDescPtr->strides.hStride;
             }
         }
     }
