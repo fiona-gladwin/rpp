@@ -92,9 +92,9 @@ int main(int argc, char **argv)
     unsigned int outputFormatToggle = atoi(argv[5]);
     int test_case = atoi(argv[6]);
 
-    bool additionalParamCase = (test_case == 8 || test_case == 21 || test_case == 24);
+    bool additionalParamCase = (test_case == 8 || test_case == 21 || test_case == 24 || test_case == 79);
     bool kernelSizeCase = false;
-    bool interpolationTypeCase = (test_case == 21 || test_case == 24);
+    bool interpolationTypeCase = (test_case == 21 || test_case == 24 || test_case == 79);
     bool noiseTypeCase = (test_case == 8);
     bool pln1OutTypeCase = (test_case == 86);
 
@@ -1693,25 +1693,31 @@ int main(int argc, char **argv)
             }
         }
 
+        if (interpolationType != RpptInterpolationType::NEAREST_NEIGHBOR && interpolationType != RpptInterpolationType::BILINEAR)
+        {
+            missingFuncFlag = 1;
+            break;
+        }
+
         start_omp = omp_get_wtime();
         start = clock();
         if (ip_bitDepth == 0)
-            rppt_remap_host(input, srcDescPtr, output, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, roiTensorPtrSrc, roiTypeSrc, handle);
+            rppt_remap_host(input, srcDescPtr, output, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, interpolationType, roiTensorPtrSrc, roiTypeSrc, handle);
         else if (ip_bitDepth == 1)
-            rppt_remap_host(inputf16, srcDescPtr, outputf16, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, roiTensorPtrSrc, roiTypeSrc, handle);
+            rppt_remap_host(inputf16, srcDescPtr, outputf16, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, interpolationType, roiTensorPtrSrc, roiTypeSrc, handle);
         else if (ip_bitDepth == 2)
-            rppt_remap_host(inputf32, srcDescPtr, outputf32, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, roiTensorPtrSrc, roiTypeSrc, handle);
+            rppt_remap_host(inputf32, srcDescPtr, outputf32, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, interpolationType, roiTensorPtrSrc, roiTypeSrc, handle);
         else if (ip_bitDepth == 3)
             missingFuncFlag = 1;
         else if (ip_bitDepth == 4)
             missingFuncFlag = 1;
         else if (ip_bitDepth == 5)
-            rppt_remap_host(inputi8, srcDescPtr, outputi8, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, roiTensorPtrSrc, roiTypeSrc, handle);
+            rppt_remap_host(inputi8, srcDescPtr, outputi8, dstDescPtr, rowRemapTable, colRemapTable, tableDescPtr, interpolationType, roiTensorPtrSrc, roiTypeSrc, handle);
         else if (ip_bitDepth == 6)
             missingFuncFlag = 1;
         else
             missingFuncFlag = 1;
-        
+
         break;
     }
     case 80:
