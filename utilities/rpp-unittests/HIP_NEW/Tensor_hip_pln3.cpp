@@ -1487,7 +1487,7 @@ int main(int argc, char **argv)
          if (ip_bitDepth == 0)
             rppt_glitch_gpu(d_input, srcDescPtr, d_output, dstDescPtr, x_offset_r, y_offset_r, x_offset_g, y_offset_g, x_offset_b, y_offset_b, d_roiTensorPtrSrc, roiTypeSrc, handle);
         else if (ip_bitDepth == 1)
-            rppt_glitch_gpu(d_inputf16, srcDescPtr, d_outputf16, dstDescPtr, x_offset_r, y_offset_r, x_offset_g, y_offset_g, x_offset_b, y_offset_b, d_roiTensorPtrSrc, roiTypeSrc, handle);
+            missingFuncFlag = 1;//rppt_glitch_gpu(d_inputf16, srcDescPtr, d_outputf16, dstDescPtr, x_offset_r, y_offset_r, x_offset_g, y_offset_g, x_offset_b, y_offset_b, d_roiTensorPtrSrc, roiTypeSrc, handle);
         else if (ip_bitDepth == 2)
             rppt_glitch_gpu(d_inputf32, srcDescPtr, d_outputf32, dstDescPtr, x_offset_r, y_offset_r, x_offset_g, y_offset_g, x_offset_b, y_offset_b, d_roiTensorPtrSrc, roiTypeSrc, handle);
         else if (ip_bitDepth == 3)
