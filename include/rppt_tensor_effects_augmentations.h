@@ -165,7 +165,7 @@ RppStatus rppt_non_linear_blend_gpu(RppPtr_t srcPtr1, RppPtr_t srcPtr2, RpptDesc
 // *param[in] srcDescPtr source tensor descriptor
 // *param[out] dstPtr destination tensor memory
 // *param[in] dstDescPtr destination tensor descriptor
-// *param[in] stdDevTensor standard deviation values to quantify vignette effect (1D tensor of size batchSize with stdDevTensor[n] > 0 for each image in batch)
+// *param[in] stdDevTensor standard deviation values to quantify vignette effect (1D tensor of size batchSize with stdDevTensor[n] >= 0 for each image in batch)
 // *param[in] roiTensorSrc ROI data for each image in source tensor (2D tensor of size batchSize * 4, in either format - XYWH(xy.x, xy.y, roiWidth, roiHeight) or LTRB(lt.x, lt.y, rb.x, rb.y))
 // *param[in] roiType ROI type used (RpptRoiType::XYWH or RpptRoiType::LTRB)
 // *returns a  RppStatus enumeration.

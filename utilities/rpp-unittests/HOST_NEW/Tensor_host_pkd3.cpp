@@ -1525,7 +1525,7 @@ int main(int argc, char **argv)
     }
     case 46:
     {
-        test_case_name = "non_linear_blend";
+        test_case_name = "vignette";
 
         Rpp32f stdDev[images];
         for (i = 0; i < images; i++)
