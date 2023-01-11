@@ -1060,17 +1060,14 @@ RppStatus rppt_vignette_gpu(RppPtr_t srcPtr,
                             RpptDescPtr srcDescPtr,
                             RppPtr_t dstPtr,
                             RpptDescPtr dstDescPtr,
-                            Rpp32f *stdDevTensor,
+                            Rpp32f *vignetteIntensityTensor,
                             RpptROIPtr roiTensorPtrSrc,
                             RpptRoiType roiType,
                             rppHandle_t rppHandle)
 {
 #ifdef HIP_COMPILE
-    for(int i = 0; i < srcDescPtr->n; i++)
-        if (stdDevTensor[i] == 0)
-            return RPP_ERROR_ZERO_DIVISION;
     Rpp32u paramIndex = 0;
-    copy_param_float(stdDevTensor, rpp::deref(rppHandle), paramIndex++);
+    copy_param_float(vignetteIntensityTensor, rpp::deref(rppHandle), paramIndex++);
 
     if ((srcDescPtr->dataType == RpptDataType::U8) && (dstDescPtr->dataType == RpptDataType::U8))
     {
