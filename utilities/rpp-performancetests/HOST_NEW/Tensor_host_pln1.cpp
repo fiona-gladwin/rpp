@@ -1411,7 +1411,7 @@ int main(int argc, char **argv)
             else if (ip_bitDepth == 4)
                 missingFuncFlag = 1;
             else if (ip_bitDepth == 5)
-                rppt_vignette_host(inputi8, srcDescPtr, outputi8, dstDescPtr, stdDev, roiTensorPtrSrc, roiTypeSrc, handle);
+                rppt_vignette_host(inputi8, srcDescPtr, outputi8, dstDescPtr, intensity, roiTensorPtrSrc, roiTypeSrc, handle);
             else if (ip_bitDepth == 6)
                 missingFuncFlag = 1;
             else
