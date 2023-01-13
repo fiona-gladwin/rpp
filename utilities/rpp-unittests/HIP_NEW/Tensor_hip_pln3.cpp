@@ -1864,7 +1864,7 @@ int main(int argc, char **argv)
         Rpp32f intensity[images];
         for (i = 0; i < images; i++)
         {
-            intensity[i] = 4.0;
+            intensity[i] = 1;
         }
 
         // Uncomment to run test case with an xywhROI override

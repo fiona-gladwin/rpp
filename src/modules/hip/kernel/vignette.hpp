@@ -1,7 +1,7 @@
 #include <hip/hip_runtime.h>
 #include "rpp_hip_common.hpp"
 
-__device__ void vignette_gaussian_hip_compute(float &intensity, int2 &halfDimsWH_i2, int2 &idXY_i2, float &radius, d_float8 *gaussianValue_f8)
+__device__ void vignette_gaussian_hip_compute(float &intensity, int2 &halfDimsWH_i2, int2 &idXY_i2, float &invSqrRadius, d_float8 *gaussianValue_f8)
 {
     float rowLocComponent;
     rowLocComponent = idXY_i2.y - halfDimsWH_i2.y;
@@ -10,6 +10,8 @@ __device__ void vignette_gaussian_hip_compute(float &intensity, int2 &halfDimsWH
     d_float8 distance_f8;
     d_float8 colLocComponent_f8;
     float4 rowLocComponent_f4 = (float4)rowLocComponent;
+    float4 invSqrRadius_f4 = (float4)invSqrRadius;
+    float4 intensity_f4 = (float4)intensity;
 
     colLocComponent_f8.f4[0] = make_float4(idXY_i2.x, idXY_i2.x + 1, idXY_i2.x + 2, idXY_i2.x + 3);
     colLocComponent_f8.f4[1] = colLocComponent_f8.f4[0] + (float4)4;
@@ -17,18 +19,8 @@ __device__ void vignette_gaussian_hip_compute(float &intensity, int2 &halfDimsWH
     colLocComponent_f8.f4[1] -= (float4)halfDimsWH_i2.x;
     colLocComponent_f8.f4[0] = (colLocComponent_f8.f4[0] * colLocComponent_f8.f4[0]) + rowLocComponent_f4;
     colLocComponent_f8.f4[1] = (colLocComponent_f8.f4[1] * colLocComponent_f8.f4[1]) + rowLocComponent_f4;
-    rpp_hip_math_sqrt8(&colLocComponent_f8, &distance_f8);
-    colLocComponent_f8.f1[0] = intensity * (1.0 - powf(2, distance_f8.f1[0] / radius));
-    colLocComponent_f8.f1[1] = intensity * (1.0 - powf(2, distance_f8.f1[1] / radius));
-    colLocComponent_f8.f1[2] = intensity * (1.0 - powf(2, distance_f8.f1[2] / radius));
-    colLocComponent_f8.f1[3] = intensity * (1.0 - powf(2, distance_f8.f1[3] / radius));
-    colLocComponent_f8.f1[4] = intensity * (1.0 - powf(2, distance_f8.f1[4] / radius));
-    colLocComponent_f8.f1[5] = intensity * (1.0 - powf(2, distance_f8.f1[5] / radius));
-    colLocComponent_f8.f1[6] = intensity * (1.0 - powf(2, distance_f8.f1[6] / radius));
-    colLocComponent_f8.f1[7] = intensity * (1.0 - powf(2, distance_f8.f1[7] / radius));
-
-    gaussianValue_f8->f4[0] = make_float4(expf(colLocComponent_f8.f4[0].x), expf(colLocComponent_f8.f4[0].y), expf(colLocComponent_f8.f4[0].z), expf(colLocComponent_f8.f4[0].w));
-    gaussianValue_f8->f4[1] = make_float4(expf(colLocComponent_f8.f4[1].x), expf(colLocComponent_f8.f4[1].y), expf(colLocComponent_f8.f4[1].z), expf(colLocComponent_f8.f4[1].w));
+    gaussianValue_f8->f4[0] = intensity_f4 * (1.0 - (colLocComponent_f8.f4[0] * invSqrRadius_f4));
+    gaussianValue_f8->f4[1] = intensity_f4 * (1.0 - (colLocComponent_f8.f4[1] * invSqrRadius_f4));
 }
 
 __device__ void vignette_8_hip_compute(d_float8 *src_f8, d_float8 *dst_f8, d_float8 *gaussianValue_f8)
@@ -67,11 +59,12 @@ __global__ void vignette_pkd_tensor(T *srcPtr,
     float intensity = vignetteIntensity[id_z];
     int2 halfDimsWH_i2 = make_int2(roiTensorPtrSrc[id_z].xywhROI.roiWidth >> 1, roiTensorPtrSrc[id_z].xywhROI.roiHeight >> 1);
     int2 idXY_i2 = make_int2(id_x, id_y);
-    float radius = max(roiTensorPtrSrc[id_z].xywhROI.roiWidth, roiTensorPtrSrc[id_z].xywhROI.roiHeight);
+    float radius = fmaxf(halfDimsWH_i2.x, halfDimsWH_i2.y);
+    float invSqrRadius = 1/(radius*radius);
 
     d_float24 src_f24, dst_f24;
     d_float8 gaussianValue_f8;
-    vignette_gaussian_hip_compute(intensity, halfDimsWH_i2, idXY_i2, radius, &gaussianValue_f8);
+    vignette_gaussian_hip_compute(intensity, halfDimsWH_i2, idXY_i2, invSqrRadius, &gaussianValue_f8);
 
     rpp_hip_load24_pkd3_and_unpack_to_float24_pln3(srcPtr + srcIdx, &src_f24);
     vignette_24_hip_compute(&src_f24, &dst_f24, &gaussianValue_f8);
@@ -102,11 +95,12 @@ __global__ void vignette_pln_tensor(T *srcPtr,
     float intensity = vignetteIntensity[id_z];
     int2 halfDimsWH_i2 = make_int2(roiTensorPtrSrc[id_z].xywhROI.roiWidth >> 1, roiTensorPtrSrc[id_z].xywhROI.roiHeight >> 1);
     int2 idXY_i2 = make_int2(id_x, id_y);
-    float radius = max(roiTensorPtrSrc[id_z].xywhROI.roiWidth, roiTensorPtrSrc[id_z].xywhROI.roiHeight);
+    float radius = fmaxf(halfDimsWH_i2.x, halfDimsWH_i2.y);
+    float invSqrRadius = 1/(radius*radius);
 
     d_float8 src_f8, dst_f8;
     d_float8 gaussianValue_f8;
-    vignette_gaussian_hip_compute(intensity, halfDimsWH_i2, idXY_i2, radius, &gaussianValue_f8);
+    vignette_gaussian_hip_compute(intensity, halfDimsWH_i2, idXY_i2, invSqrRadius, &gaussianValue_f8);
 
     rpp_hip_load8_and_unpack_to_float8(srcPtr + srcIdx, &src_f8);
     vignette_8_hip_compute(&src_f8, &dst_f8, &gaussianValue_f8);
@@ -153,11 +147,12 @@ __global__ void vignette_pkd3_pln3_tensor(T *srcPtr,
     float intensity = vignetteIntensity[id_z];
     int2 halfDimsWH_i2 = make_int2(roiTensorPtrSrc[id_z].xywhROI.roiWidth >> 1, roiTensorPtrSrc[id_z].xywhROI.roiHeight >> 1);
     int2 idXY_i2 = make_int2(id_x, id_y);
-    float radius = max(roiTensorPtrSrc[id_z].xywhROI.roiWidth, roiTensorPtrSrc[id_z].xywhROI.roiHeight);
+    float radius = fmaxf(halfDimsWH_i2.x, halfDimsWH_i2.y);
+    float invSqrRadius = 1/(radius*radius);
 
     d_float24 src_f24, dst_f24;
     d_float8 gaussianValue_f8;
-    vignette_gaussian_hip_compute(intensity, halfDimsWH_i2, idXY_i2, radius, &gaussianValue_f8);
+    vignette_gaussian_hip_compute(intensity, halfDimsWH_i2, idXY_i2, invSqrRadius, &gaussianValue_f8);
 
     rpp_hip_load24_pkd3_and_unpack_to_float24_pln3(srcPtr + srcIdx, &src_f24);
     vignette_24_hip_compute(&src_f24, &dst_f24, &gaussianValue_f8);
@@ -187,11 +182,12 @@ __global__ void vignette_pln3_pkd3_tensor(T *srcPtr,
     float intensity = vignetteIntensity[id_z];
     int2 halfDimsWH_i2 = make_int2(roiTensorPtrSrc[id_z].xywhROI.roiWidth >> 1, roiTensorPtrSrc[id_z].xywhROI.roiHeight >> 1);
     int2 idXY_i2 = make_int2(id_x, id_y);
-    float radius = max(roiTensorPtrSrc[id_z].xywhROI.roiWidth, roiTensorPtrSrc[id_z].xywhROI.roiHeight);
+    float radius = fmaxf(halfDimsWH_i2.x, halfDimsWH_i2.y);
+    float invSqrRadius = 1/(radius*radius);
 
     d_float24 src_f24, dst_f24;
     d_float8 gaussianValue_f8;
-    vignette_gaussian_hip_compute(intensity, halfDimsWH_i2, idXY_i2, radius, &gaussianValue_f8);
+    vignette_gaussian_hip_compute(intensity, halfDimsWH_i2, idXY_i2, invSqrRadius, &gaussianValue_f8);
 
     rpp_hip_load24_pln3_and_unpack_to_float24_pln3(srcPtr + srcIdx, srcStridesNCH.y, &src_f24);
     vignette_24_hip_compute(&src_f24, &dst_f24, &gaussianValue_f8);

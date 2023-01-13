@@ -1577,10 +1577,10 @@ int main(int argc, char **argv)
         {
             test_case_name = "vignette";
 
-            Rpp32f stdDev[images];
+            Rpp32f intensity[images];
             for (i = 0; i < images; i++)
             {
-                stdDev[i] = 75.0;
+                intensity[i] = 1;
             }
 
             // Uncomment to run test case with an xywhROI override
@@ -1606,17 +1606,17 @@ int main(int argc, char **argv)
             start_omp = omp_get_wtime();
             start = clock();
             if (ip_bitDepth == 0)
-                rppt_vignette_host(input, srcDescPtr, output, dstDescPtr, stdDev, roiTensorPtrSrc, roiTypeSrc, handle);
+                rppt_vignette_host(input, srcDescPtr, output, dstDescPtr, intensity, roiTensorPtrSrc, roiTypeSrc, handle);
             else if (ip_bitDepth == 1)
-                rppt_vignette_host(inputf16, srcDescPtr, outputf16, dstDescPtr, stdDev, roiTensorPtrSrc, roiTypeSrc, handle);
+                rppt_vignette_host(inputf16, srcDescPtr, outputf16, dstDescPtr, intensity, roiTensorPtrSrc, roiTypeSrc, handle);
             else if (ip_bitDepth == 2)
-                rppt_vignette_host(inputf32, srcDescPtr, outputf32, dstDescPtr, stdDev, roiTensorPtrSrc, roiTypeSrc, handle);
+                rppt_vignette_host(inputf32, srcDescPtr, outputf32, dstDescPtr, intensity, roiTensorPtrSrc, roiTypeSrc, handle);
             else if (ip_bitDepth == 3)
                 missingFuncFlag = 1;
             else if (ip_bitDepth == 4)
                 missingFuncFlag = 1;
             else if (ip_bitDepth == 5)
-                rppt_vignette_host(inputi8, srcDescPtr, outputi8, dstDescPtr, stdDev, roiTensorPtrSrc, roiTypeSrc, handle);
+                rppt_vignette_host(inputi8, srcDescPtr, outputi8, dstDescPtr, intensity, roiTensorPtrSrc, roiTypeSrc, handle);
             else if (ip_bitDepth == 6)
                 missingFuncFlag = 1;
             else

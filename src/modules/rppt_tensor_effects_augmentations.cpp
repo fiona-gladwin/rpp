@@ -487,14 +487,11 @@ RppStatus rppt_vignette_host(RppPtr_t srcPtr,
                              RpptDescPtr srcDescPtr,
                              RppPtr_t dstPtr,
                              RpptDescPtr dstDescPtr,
-                             Rpp32f *stdDevTensor,
+                             Rpp32f *vignetteIntensityTensor,
                              RpptROIPtr roiTensorPtrSrc,
                              RpptRoiType roiType,
                              rppHandle_t rppHandle)
 {
-    for(int i = 0; i < srcDescPtr->n; i++)
-        if (stdDevTensor[i] == 0)
-            return RPP_ERROR_ZERO_DIVISION;
     RppLayoutParams layoutParams = get_layout_params(srcDescPtr->layout, srcDescPtr->c);
 
     if ((srcDescPtr->dataType == RpptDataType::U8) && (dstDescPtr->dataType == RpptDataType::U8))
@@ -503,7 +500,7 @@ RppStatus rppt_vignette_host(RppPtr_t srcPtr,
                                    srcDescPtr,
                                    static_cast<Rpp8u*>(dstPtr) + dstDescPtr->offsetInBytes,
                                    dstDescPtr,
-                                   stdDevTensor,
+                                   vignetteIntensityTensor,
                                    roiTensorPtrSrc,
                                    roiType,
                                    layoutParams);
@@ -514,7 +511,7 @@ RppStatus rppt_vignette_host(RppPtr_t srcPtr,
                                      srcDescPtr,
                                      (Rpp16f*) (static_cast<Rpp8u*>(dstPtr) + dstDescPtr->offsetInBytes),
                                      dstDescPtr,
-                                     stdDevTensor,
+                                     vignetteIntensityTensor,
                                      roiTensorPtrSrc,
                                      roiType,
                                      layoutParams);
@@ -525,7 +522,7 @@ RppStatus rppt_vignette_host(RppPtr_t srcPtr,
                                      srcDescPtr,
                                      (Rpp32f*) (static_cast<Rpp8u*>(dstPtr) + dstDescPtr->offsetInBytes),
                                      dstDescPtr,
-                                     stdDevTensor,
+                                     vignetteIntensityTensor,
                                      roiTensorPtrSrc,
                                      roiType,
                                      layoutParams);
@@ -536,7 +533,7 @@ RppStatus rppt_vignette_host(RppPtr_t srcPtr,
                                    srcDescPtr,
                                    static_cast<Rpp8s*>(dstPtr) + dstDescPtr->offsetInBytes,
                                    dstDescPtr,
-                                   stdDevTensor,
+                                   vignetteIntensityTensor,
                                    roiTensorPtrSrc,
                                    roiType,
                                    layoutParams);
