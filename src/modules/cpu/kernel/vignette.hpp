@@ -762,10 +762,14 @@ RppStatus vignette_i8_i8_host_tensor(Rpp8s *srcPtr,
                     Rpp32s jLoc = vectorLoopCount - halfWidth;
                     Rpp32f jLocComponent = jLoc * jLoc;
                     Rpp32f gaussianValue = std::exp((iLocComponent + jLocComponent) * multiplier);
+                    Rpp32f srcPtrTempI8[3];
+                    srcPtrTempI8[0] = (Rpp32f)srcPtrTemp[0] + 128;
+                    srcPtrTempI8[1] = (Rpp32f)srcPtrTemp[1] + 128;
+                    srcPtrTempI8[2] = (Rpp32f)srcPtrTemp[2] + 128;
 
-                    *dstPtrTempR = (Rpp8s) RPPPIXELCHECK((Rpp32f)srcPtrTemp[0] * gaussianValue);
-                    *dstPtrTempG = (Rpp8s) RPPPIXELCHECK((Rpp32f)srcPtrTemp[1] * gaussianValue);
-                    *dstPtrTempB = (Rpp8s) RPPPIXELCHECK((Rpp32f)srcPtrTemp[2] * gaussianValue);
+                    *dstPtrTempR = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[0] * gaussianValue) - 128);
+                    *dstPtrTempG = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[1] * gaussianValue) - 128);
+                    *dstPtrTempB = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[2] * gaussianValue) - 128);
 
                     srcPtrTemp += 3;
                     dstPtrTempR++;
@@ -819,10 +823,14 @@ RppStatus vignette_i8_i8_host_tensor(Rpp8s *srcPtr,
                     Rpp32s jLoc = vectorLoopCount - halfWidth;
                     Rpp32f jLocComponent = jLoc * jLoc;
                     Rpp32f gaussianValue = std::exp((iLocComponent + jLocComponent) * multiplier);
+                    Rpp32f srcPtrTempI8[3];
+                    srcPtrTempI8[0] = (Rpp32f)*srcPtrTempR + 128;
+                    srcPtrTempI8[1] = (Rpp32f)*srcPtrTempG + 128;
+                    srcPtrTempI8[2] = (Rpp32f)*srcPtrTempB + 128;
 
-                    dstPtrTemp[0] = (Rpp8s) RPPPIXELCHECKI8((Rpp32f)*srcPtrTempR * gaussianValue);
-                    dstPtrTemp[1] = (Rpp8s) RPPPIXELCHECKI8((Rpp32f)*srcPtrTempG * gaussianValue);
-                    dstPtrTemp[2] = (Rpp8s) RPPPIXELCHECKI8((Rpp32f)*srcPtrTempB * gaussianValue);
+                    dstPtrTemp[0] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[0] * gaussianValue) - 128);
+                    dstPtrTemp[1] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[1] * gaussianValue) - 128);
+                    dstPtrTemp[2] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[2] * gaussianValue) - 128);
 
                     srcPtrTempR++;
                     srcPtrTempG++;
@@ -870,10 +878,14 @@ RppStatus vignette_i8_i8_host_tensor(Rpp8s *srcPtr,
                     Rpp32s jLoc = vectorLoopCount - halfWidth;
                     Rpp32f jLocComponent = jLoc * jLoc;
                     Rpp32f gaussianValue = std::exp((iLocComponent + jLocComponent) * multiplier);
+                    Rpp32f srcPtrTempI8[3];
+                    srcPtrTempI8[0] = (Rpp32f)srcPtrTemp[0] + 128;
+                    srcPtrTempI8[1] = (Rpp32f)srcPtrTemp[1] + 128;
+                    srcPtrTempI8[2] = (Rpp32f)srcPtrTemp[2] + 128;
 
-                    dstPtrTemp[0] = (Rpp8s) RPPPIXELCHECKI8((Rpp32f)srcPtrTemp[0] * gaussianValue);
-                    dstPtrTemp[1] = (Rpp8s) RPPPIXELCHECKI8((Rpp32f)srcPtrTemp[1] * gaussianValue);
-                    dstPtrTemp[2] = (Rpp8s) RPPPIXELCHECKI8((Rpp32f)srcPtrTemp[2] * gaussianValue);
+                    dstPtrTemp[0] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[0] * gaussianValue) - 128);
+                    dstPtrTemp[1] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[1] * gaussianValue) - 128);
+                    dstPtrTemp[2] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[2] * gaussianValue) - 128);
 
                     srcPtrTemp += 3;
                     dstPtrTemp += 3;
@@ -929,10 +941,14 @@ RppStatus vignette_i8_i8_host_tensor(Rpp8s *srcPtr,
                     Rpp32s jLoc = vectorLoopCount - halfWidth;
                     Rpp32f jLocComponent = jLoc * jLoc;
                     Rpp32f gaussianValue = std::exp((iLocComponent + jLocComponent) * multiplier);
+                    Rpp32f srcPtrTempI8[3];
+                    srcPtrTempI8[0] = (Rpp32f)*srcPtrTempR + 128;
+                    srcPtrTempI8[1] = (Rpp32f)*srcPtrTempG + 128;
+                    srcPtrTempI8[2] = (Rpp32f)*srcPtrTempB + 128;
 
-                    *dstPtrTempR = (Rpp8s) RPPPIXELCHECKI8((Rpp32f)*srcPtrTempR * gaussianValue);
-                    *dstPtrTempG = (Rpp8s) RPPPIXELCHECKI8((Rpp32f)*srcPtrTempG * gaussianValue);
-                    *dstPtrTempB = (Rpp8s) RPPPIXELCHECKI8((Rpp32f)*srcPtrTempB * gaussianValue);
+                    *dstPtrTempR = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[0] * gaussianValue) - 128);
+                    *dstPtrTempG = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[1] * gaussianValue) - 128);
+                    *dstPtrTempB = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[2] * gaussianValue) - 128);
 
                     srcPtrTempR++;
                     srcPtrTempG++;
@@ -984,7 +1000,10 @@ RppStatus vignette_i8_i8_host_tensor(Rpp8s *srcPtr,
                     Rpp32s jLoc = vectorLoopCount - halfWidth;
                     Rpp32f jLocComponent = jLoc * jLoc;
                     Rpp32f gaussianValue = std::exp((iLocComponent + jLocComponent) * multiplier);
-                    *dstPtrTemp = (Rpp8s) RPPPIXELCHECKI8((Rpp32f)*srcPtrTemp * gaussianValue);
+                    Rpp32f srcPtrTempI8;
+                    srcPtrTempI8 = (Rpp32f)*srcPtrTemp + 128;
+
+                    *dstPtrTemp = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8 * gaussianValue) - 128);
                     srcPtrTemp++;
                     dstPtrTemp++;
                 }

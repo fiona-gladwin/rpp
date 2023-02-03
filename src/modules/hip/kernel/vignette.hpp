@@ -7,7 +7,6 @@ __device__ void vignette_gaussian_hip_compute(float &multiplier, int2 &halfDimsW
     rowLocComponent = idXY_i2.y - halfDimsWH_i2.y;
     rowLocComponent *= (rowLocComponent);
 
-    d_float8 distance_f8;
     d_float8 colLocComponent_f8;
     float4 rowLocComponent_f4 = (float4)rowLocComponent;
     float4 multiplier_f4 = (float4)multiplier;
@@ -24,17 +23,36 @@ __device__ void vignette_gaussian_hip_compute(float &multiplier, int2 &halfDimsW
     gaussianValue_f8->f4[1] = make_float4(expf(colLocComponent_f8.f4[1].x), expf(colLocComponent_f8.f4[1].y), expf(colLocComponent_f8.f4[1].z), expf(colLocComponent_f8.f4[1].w));
 }
 
-__device__ void vignette_8_hip_compute(d_float8 *src_f8, d_float8 *dst_f8, d_float8 *gaussianValue_f8)
+__device__ void vignette_8_hip_compute(uchar *srcPtr, d_float8 *src_f8, d_float8 *dst_f8, d_float8 *gaussianValue_f8)
 {
     dst_f8->f4[0] = src_f8->f4[0] * gaussianValue_f8->f4[0];
     dst_f8->f4[1] = src_f8->f4[1] * gaussianValue_f8->f4[1];
 }
 
-__device__ void vignette_24_hip_compute(d_float24 *src_f24, d_float24 *dst_f24, d_float8 *gaussianValue_f8)
+__device__ void vignette_8_hip_compute(float *srcPtr, d_float8 *src_f8, d_float8 *dst_f8, d_float8 *gaussianValue_f8)
 {
-    vignette_8_hip_compute(&(src_f24->f8[0]), &(dst_f24->f8[0]), gaussianValue_f8);
-    vignette_8_hip_compute(&(src_f24->f8[1]), &(dst_f24->f8[1]), gaussianValue_f8);
-    vignette_8_hip_compute(&(src_f24->f8[2]), &(dst_f24->f8[2]), gaussianValue_f8);
+    dst_f8->f4[0] = src_f8->f4[0] * gaussianValue_f8->f4[0];
+    dst_f8->f4[1] = src_f8->f4[1] * gaussianValue_f8->f4[1];
+}
+
+__device__ void vignette_8_hip_compute(signed char *srcPtr, d_float8 *src_f8, d_float8 *dst_f8, d_float8 *gaussianValue_f8)
+{
+    dst_f8->f4[0] = ((src_f8->f4[0] + (float4)128) * gaussianValue_f8->f4[0]) - (float4)128;
+    dst_f8->f4[1] = ((src_f8->f4[1] + (float4)128) * gaussianValue_f8->f4[1]) - (float4)128;
+}
+
+__device__ void vignette_8_hip_compute(half *srcPtr, d_float8 *src_f8, d_float8 *dst_f8, d_float8 *gaussianValue_f8)
+{
+    dst_f8->f4[0] = src_f8->f4[0] * gaussianValue_f8->f4[0];
+    dst_f8->f4[1] = src_f8->f4[1] * gaussianValue_f8->f4[1];
+}
+
+template <typename T>
+__device__ void vignette_24_hip_compute(T *srcPtr, d_float24 *src_f24, d_float24 *dst_f24, d_float8 *gaussianValue_f8)
+{
+    vignette_8_hip_compute(srcPtr, &(src_f24->f8[0]), &(dst_f24->f8[0]), gaussianValue_f8);
+    vignette_8_hip_compute(srcPtr, &(src_f24->f8[1]), &(dst_f24->f8[1]), gaussianValue_f8);
+    vignette_8_hip_compute(srcPtr, &(src_f24->f8[2]), &(dst_f24->f8[2]), gaussianValue_f8);
 }
 
 template <typename T>
@@ -68,7 +86,7 @@ __global__ void vignette_pkd_tensor(T *srcPtr,
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
 
     rpp_hip_load24_pkd3_and_unpack_to_float24_pln3(srcPtr + srcIdx, &src_f24);
-    vignette_24_hip_compute(&src_f24, &dst_f24, &gaussianValue_f8);
+    vignette_24_hip_compute(srcPtr, &src_f24, &dst_f24, &gaussianValue_f8);
     rpp_hip_pack_float24_pln3_and_store24_pkd3(dstPtr + dstIdx, &dst_f24);
 }
 
@@ -104,7 +122,7 @@ __global__ void vignette_pln_tensor(T *srcPtr,
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
 
     rpp_hip_load8_and_unpack_to_float8(srcPtr + srcIdx, &src_f8);
-    vignette_8_hip_compute(&src_f8, &dst_f8, &gaussianValue_f8);
+    vignette_8_hip_compute(srcPtr, &src_f8, &dst_f8, &gaussianValue_f8);
     rpp_hip_pack_float8_and_store8(dstPtr + dstIdx, &dst_f8);
 
     if (channelsDst == 3)
@@ -113,14 +131,14 @@ __global__ void vignette_pln_tensor(T *srcPtr,
         dstIdx += dstStridesNCH.y;
 
         rpp_hip_load8_and_unpack_to_float8(srcPtr + srcIdx, &src_f8);
-        vignette_8_hip_compute(&src_f8, &dst_f8, &gaussianValue_f8);
+        vignette_8_hip_compute(srcPtr, &src_f8, &dst_f8, &gaussianValue_f8);
         rpp_hip_pack_float8_and_store8(dstPtr + dstIdx, &dst_f8);
 
         srcIdx += srcStridesNCH.y;
         dstIdx += dstStridesNCH.y;
 
         rpp_hip_load8_and_unpack_to_float8(srcPtr + srcIdx, &src_f8);
-        vignette_8_hip_compute(&src_f8, &dst_f8, &gaussianValue_f8);
+        vignette_8_hip_compute(srcPtr, &src_f8, &dst_f8, &gaussianValue_f8);
         rpp_hip_pack_float8_and_store8(dstPtr + dstIdx, &dst_f8);
     }
 }
@@ -156,7 +174,7 @@ __global__ void vignette_pkd3_pln3_tensor(T *srcPtr,
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
 
     rpp_hip_load24_pkd3_and_unpack_to_float24_pln3(srcPtr + srcIdx, &src_f24);
-    vignette_24_hip_compute(&src_f24, &dst_f24, &gaussianValue_f8);
+    vignette_24_hip_compute(srcPtr, &src_f24, &dst_f24, &gaussianValue_f8);
     rpp_hip_pack_float24_pln3_and_store24_pln3(dstPtr + dstIdx, dstStridesNCH.y, &dst_f24);
 }
 
@@ -191,7 +209,7 @@ __global__ void vignette_pln3_pkd3_tensor(T *srcPtr,
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
 
     rpp_hip_load24_pln3_and_unpack_to_float24_pln3(srcPtr + srcIdx, srcStridesNCH.y, &src_f24);
-    vignette_24_hip_compute(&src_f24, &dst_f24, &gaussianValue_f8);
+    vignette_24_hip_compute(srcPtr, &src_f24, &dst_f24, &gaussianValue_f8);
     rpp_hip_pack_float24_pln3_and_store24_pkd3(dstPtr + dstIdx, &dst_f24);
 }
 
