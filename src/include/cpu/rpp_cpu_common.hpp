@@ -3001,6 +3001,40 @@ inline void compute_color_cast_12_host(__m128 *p, __m128 pMul, __m128 *pAdd)
     p[2] = _mm_fmadd_ps(_mm_sub_ps(p[2], pAdd[2]), pMul, pAdd[2]);    // color_cast adjustment Rs
 }
 
+inline void compute_color_temperature_48_host(__m128 *p, __m128 pAdj)
+{
+    p[0] = _mm_sub_ps(p[0], pAdj);    // color_temperature adjustment Rs
+    p[1] = _mm_sub_ps(p[1], pAdj);    // color_temperature adjustment Rs
+    p[2] = _mm_sub_ps(p[2], pAdj);    // color_temperature adjustment Rs
+    p[3] = _mm_sub_ps(p[3], pAdj);    // color_temperature adjustment Rs
+    // no color_temperature adjustment Gs
+    p[8] = _mm_add_ps(p[8], pAdj);    // color_temperature adjustment Bs
+    p[9] = _mm_add_ps(p[9], pAdj);    // color_temperature adjustment Bs
+    p[10] = _mm_add_ps(p[10], pAdj);    // color_temperature adjustment Bs
+    p[11] = _mm_add_ps(p[11], pAdj);    // color_temperature adjustment Bs
+}
+
+inline void compute_color_temperature_16_host(__m128 *p, __m128 pAdj)
+{
+    p[0] = _mm_add_ps(p[0], pAdj);    // color_temperature adjustment
+    p[1] = _mm_add_ps(p[1], pAdj);    // color_temperature adjustment
+    p[2] = _mm_add_ps(p[2], pAdj);    // color_temperature adjustment
+    p[3] = _mm_add_ps(p[3], pAdj);    // color_temperature adjustment
+}
+
+
+inline void compute_color_temperature_12_host(__m128 *p, __m128 pAdj)
+{
+    p[0] = _mm_sub_ps(p[0], pAdj);    // color_temperature adjustment Rs
+    // no color_temperature adjustment Gs
+    p[2] = _mm_add_ps(p[2], pAdj);    // color_temperature adjustment Bs
+}
+
+inline void compute_color_temperature_4_host(__m128 *p, __m128 pAdj)
+{
+    p[0] = _mm_add_ps(p[0], pAdj);    // color_temperature adjustment
+}
+
 inline void compute_xywh_from_ltrb_host(RpptROIPtr roiPtrInput, RpptROIPtr roiPtrImage)
 {
     roiPtrImage->xywhROI.xy.x = roiPtrInput->ltrbROI.lt.x;
