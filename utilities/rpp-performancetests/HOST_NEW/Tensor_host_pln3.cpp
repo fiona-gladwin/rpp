@@ -1637,7 +1637,7 @@ int main(int argc, char **argv)
         {
             test_case_name = "color_temperature";
 
-            Rpp8s adjustmentValueTensor[images];
+            Rpp32s adjustmentValueTensor[images];
             for (i = 0; i < images; i++)
             {
                 adjustmentValueTensor[i] = 70;

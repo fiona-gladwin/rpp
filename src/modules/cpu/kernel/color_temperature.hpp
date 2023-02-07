@@ -6,7 +6,7 @@ RppStatus color_temperature_u8_u8_host_tensor(Rpp8u *srcPtr,
                                               RpptDescPtr srcDescPtr,
                                               Rpp8u *dstPtr,
                                               RpptDescPtr dstDescPtr,
-                                              Rpp8s *adjustmentValueTensor,
+                                              Rpp32s *adjustmentValueTensor,
                                               RpptROIPtr roiTensorPtrSrc,
                                               RpptRoiType roiType,
                                               RppLayoutParams layoutParams)
@@ -242,46 +242,6 @@ RppStatus color_temperature_u8_u8_host_tensor(Rpp8u *srcPtr,
                 dstPtrRowB += dstDescPtr->strides.hStride;
             }
         }
-
-        // Color Temperature without fused output-layout toggle (NCHW -> NCHW)
-        else if ((srcDescPtr->c == 1) && (srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
-        {
-            Rpp32u alignedLength = (bufferLength / 16) * 16;
-
-            Rpp8u *srcPtrRow, *dstPtrRow;
-            srcPtrRow = srcPtrChannel;
-            dstPtrRow = dstPtrChannel;
-
-            for(int i = 0; i < roi.xywhROI.roiHeight; i++)
-            {
-                Rpp8u *srcPtrTemp, *dstPtrTemp;
-                srcPtrTemp = srcPtrRow;
-                dstPtrTemp = dstPtrRow;
-
-                int vectorLoopCount = 0;
-                for (; vectorLoopCount < alignedLength; vectorLoopCount += 16)
-                {
-                    __m128 p[4];
-
-                    rpp_simd_load(rpp_load16_u8_to_f32, srcPtrTemp, p);    // simd loads
-                    compute_color_temperature_16_host(p, pAdj);    // color_temperature adjustment
-                    rpp_simd_store(rpp_store16_f32_to_u8, dstPtrTemp, p);    // simd stores
-
-                    srcPtrTemp += 16;
-                    dstPtrTemp += 16;
-                }
-                for (; vectorLoopCount < bufferLength; vectorLoopCount++)
-                {
-                    *dstPtrTemp = (Rpp8u) RPPPIXELCHECK(*srcPtrTemp + adjustmentValue);
-
-                    srcPtrTemp++;
-                    dstPtrTemp++;
-                }
-
-                srcPtrRow += srcDescPtr->strides.hStride;
-                dstPtrRow += dstDescPtr->strides.hStride;
-            }
-        }
     }
 
     return RPP_SUCCESS;
@@ -291,7 +251,7 @@ RppStatus color_temperature_f32_f32_host_tensor(Rpp32f *srcPtr,
                                                 RpptDescPtr srcDescPtr,
                                                 Rpp32f *dstPtr,
                                                 RpptDescPtr dstDescPtr,
-                                                Rpp8s *adjustmentValueTensor,
+                                                Rpp32s *adjustmentValueTensor,
                                                 RpptROIPtr roiTensorPtrSrc,
                                                 RpptRoiType roiType,
                                                 RppLayoutParams layoutParams)
@@ -527,45 +487,6 @@ RppStatus color_temperature_f32_f32_host_tensor(Rpp32f *srcPtr,
                 dstPtrRowB += srcDescPtr->strides.hStride;
             }
         }
-        // Color Temperature without fused output-layout toggle (NCHW -> NCHW)
-        else if ((srcDescPtr->c == 1) && (srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
-        {
-            Rpp32u alignedLength = (bufferLength / 4) * 4;
-
-            Rpp32f *srcPtrRow, *dstPtrRow;
-            srcPtrRow = srcPtrChannel;
-            dstPtrRow = dstPtrChannel;
-
-            for(int i = 0; i < roi.xywhROI.roiHeight; i++)
-            {
-                Rpp32f *srcPtrTemp, *dstPtrTemp;
-                srcPtrTemp = srcPtrRow;
-                dstPtrTemp = dstPtrRow;
-
-                int vectorLoopCount = 0;
-                for (; vectorLoopCount < alignedLength; vectorLoopCount += 4)
-                {
-                    __m128 p[1];
-
-                    rpp_simd_load(rpp_load4_f32_to_f32, srcPtrTemp, p);    // simd loads
-                    compute_color_temperature_4_host(p, pAdj);    // color_temperature adjustment
-                    rpp_simd_store(rpp_store4_f32_to_f32, dstPtrTemp, p);    // simd stores
-
-                    srcPtrTemp += 4;
-                    dstPtrTemp += 4;
-                }
-                for (; vectorLoopCount < bufferLength; vectorLoopCount++)
-                {
-                    *dstPtrTemp = (Rpp32f) RPPPIXELCHECKF32(*srcPtrTemp + adjustmentValue);
-
-                    srcPtrTemp++;
-                    dstPtrTemp++;
-                }
-
-                srcPtrRow += srcDescPtr->strides.hStride;
-                dstPtrRow += dstDescPtr->strides.hStride;
-            }
-        }
     }
 
     return RPP_SUCCESS;
@@ -575,7 +496,7 @@ RppStatus color_temperature_f16_f16_host_tensor(Rpp16f *srcPtr,
                                                 RpptDescPtr srcDescPtr,
                                                 Rpp16f *dstPtr,
                                                 RpptDescPtr dstDescPtr,
-                                                Rpp8s *adjustmentValueTensor,
+                                                Rpp32s *adjustmentValueTensor,
                                                 RpptROIPtr roiTensorPtrSrc,
                                                 RpptRoiType roiType,
                                                 RppLayoutParams layoutParams)
@@ -867,57 +788,6 @@ RppStatus color_temperature_f16_f16_host_tensor(Rpp16f *srcPtr,
                 dstPtrRowB += srcDescPtr->strides.hStride;
             }
         }
-        // Color Temperature without fused output-layout toggle (NCHW -> NCHW)
-        else if ((srcDescPtr->c == 1) && (srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
-        {
-            Rpp32u alignedLength = (bufferLength / 4) * 4;
-
-            Rpp16f *srcPtrRow, *dstPtrRow;
-            srcPtrRow = srcPtrChannel;
-            dstPtrRow = dstPtrChannel;
-
-            for(int i = 0; i < roi.xywhROI.roiHeight; i++)
-            {
-                Rpp16f *srcPtrTemp, *dstPtrTemp;
-                srcPtrTemp = srcPtrRow;
-                dstPtrTemp = dstPtrRow;
-
-                int vectorLoopCount = 0;
-                for (; vectorLoopCount < alignedLength; vectorLoopCount += 4)
-                {
-                    Rpp32f srcPtrTemp_ps[8], dstPtrTemp_ps[8];
-
-                    for(int cnt = 0; cnt < 4; cnt++)
-                    {
-                        srcPtrTemp_ps[cnt] = (Rpp32f) srcPtrTemp[cnt];
-                    }
-
-                    __m128 p[1];
-
-                    rpp_simd_load(rpp_load4_f32_to_f32, srcPtrTemp_ps, p);    // simd loads
-                    compute_color_temperature_4_host(p, pAdj);    // color_temperature adjustment
-                    rpp_simd_store(rpp_store4_f32_to_f32, dstPtrTemp_ps, p);    // simd stores
-
-                    for(int cnt = 0; cnt < 4; cnt++)
-                    {
-                        dstPtrTemp[cnt] = (Rpp16f) dstPtrTemp_ps[cnt];
-                    }
-
-                    srcPtrTemp += 4;
-                    dstPtrTemp += 4;
-                }
-                for (; vectorLoopCount < bufferLength; vectorLoopCount++)
-                {
-                    *dstPtrTemp = (Rpp16f) RPPPIXELCHECKF32(*srcPtrTemp + adjustmentValue);
-
-                    srcPtrTemp++;
-                    dstPtrTemp++;
-                }
-
-                srcPtrRow += srcDescPtr->strides.hStride;
-                dstPtrRow += srcDescPtr->strides.hStride;
-            }
-        }
     }
 
     return RPP_SUCCESS;
@@ -927,7 +797,7 @@ RppStatus color_temperature_i8_i8_host_tensor(Rpp8s *srcPtr,
                                               RpptDescPtr srcDescPtr,
                                               Rpp8s *dstPtr,
                                               RpptDescPtr dstDescPtr,
-                                              Rpp8s *adjustmentValueTensor,
+                                              Rpp32s *adjustmentValueTensor,
                                               RpptROIPtr roiTensorPtrSrc,
                                               RpptRoiType roiType,
                                               RppLayoutParams layoutParams)
@@ -1181,49 +1051,6 @@ RppStatus color_temperature_i8_i8_host_tensor(Rpp8s *srcPtr,
                 dstPtrRowR += dstDescPtr->strides.hStride;
                 dstPtrRowG += dstDescPtr->strides.hStride;
                 dstPtrRowB += dstDescPtr->strides.hStride;
-            }
-        }
-
-        // Color Temperature without fused output-layout toggle (NCHW -> NCHW)
-        else if ((srcDescPtr->c == 1) && (srcDescPtr->layout == RpptLayout::NCHW) && (dstDescPtr->layout == RpptLayout::NCHW))
-        {
-            Rpp32u alignedLength = (bufferLength / 16) * 16;
-
-            Rpp8s *srcPtrRow, *dstPtrRow;
-            srcPtrRow = srcPtrChannel;
-            dstPtrRow = dstPtrChannel;
-
-            for(int i = 0; i < roi.xywhROI.roiHeight; i++)
-            {
-                Rpp8s *srcPtrTemp, *dstPtrTemp;
-                srcPtrTemp = srcPtrRow;
-                dstPtrTemp = dstPtrRow;
-
-                int vectorLoopCount = 0;
-                for (; vectorLoopCount < alignedLength; vectorLoopCount += 16)
-                {
-                    __m128 p[4];
-
-                    rpp_simd_load(rpp_load16_i8_to_f32, srcPtrTemp, p);    // simd loads
-                    compute_color_temperature_16_host(p, pAdj);    // color_temperature adjustment
-                    rpp_simd_store(rpp_store16_f32_to_i8, dstPtrTemp, p);    // simd stores
-
-                    srcPtrTemp += 16;
-                    dstPtrTemp += 16;
-                }
-                for (; vectorLoopCount < bufferLength; vectorLoopCount++)
-                {
-                    Rpp32f srcPtrTempI8;
-                    srcPtrTempI8 = (Rpp32f)*srcPtrTemp + 128;
-
-                    *dstPtrTemp = (Rpp8s) RPPPIXELCHECKI8(srcPtrTempI8 + adjustmentValue - 128);
-
-                    srcPtrTemp++;
-                    dstPtrTemp++;
-                }
-
-                srcPtrRow += srcDescPtr->strides.hStride;
-                dstPtrRow += dstDescPtr->strides.hStride;
             }
         }
     }
