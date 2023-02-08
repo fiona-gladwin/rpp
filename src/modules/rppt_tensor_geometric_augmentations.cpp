@@ -30,10 +30,6 @@ THE SOFTWARE.
 #include "hip/hip_tensor_geometric_augmentations.hpp"
 #endif // HIP_COMPILE
 
-#if __APPLE__
-#define sincosf __sincosf
-#endif
-
 /******************** crop ********************/
 
 RppStatus rppt_crop_host(RppPtr_t srcPtr,
