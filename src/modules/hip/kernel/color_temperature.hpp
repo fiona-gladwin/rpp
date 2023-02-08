@@ -20,10 +20,14 @@ __device__ void color_temperature_hip_compute(float *srcPtr, d_float24 *pix_f24,
 
 __device__ void color_temperature_hip_compute(signed char *srcPtr, d_float24 *pix_f24, float4 *adjustmentValue_f4)
 {
+    float4 i8Offset_f4 = (float4) 128.0f;
+    rpp_hip_math_add24_const(pix_f24, pix_f24, i8Offset_f4);
     pix_f24->f4[0] -= *adjustmentValue_f4;
     pix_f24->f4[1] -= *adjustmentValue_f4;
     pix_f24->f4[4] += *adjustmentValue_f4;
     pix_f24->f4[5] += *adjustmentValue_f4;
+    rpp_hip_pixel_check_0to255(pix_f24);
+    rpp_hip_math_subtract24_const(pix_f24, pix_f24, i8Offset_f4);
 }
 
 __device__ void color_temperature_hip_compute(half *srcPtr, d_float24 *pix_f24, float4 *adjustmentValue_f4)
