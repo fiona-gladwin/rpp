@@ -3,36 +3,36 @@
 
 __device__ void color_temperature_hip_compute(uchar *srcPtr, d_float24 *pix_f24, float4 *adjustmentValue_f4)
 {
-    pix_f24->f4[0] += *adjustmentValue_f4;
-    pix_f24->f4[1] += *adjustmentValue_f4;
-    pix_f24->f4[4] -= *adjustmentValue_f4;
-    pix_f24->f4[5] -= *adjustmentValue_f4;
+    pix_f24->f4[0] -= *adjustmentValue_f4;
+    pix_f24->f4[1] -= *adjustmentValue_f4;
+    pix_f24->f4[4] += *adjustmentValue_f4;
+    pix_f24->f4[5] += *adjustmentValue_f4;
 }
 
 __device__ void color_temperature_hip_compute(float *srcPtr, d_float24 *pix_f24, float4 *adjustmentValue_f4)
 {
     float4 adjustment_f4 = *adjustmentValue_f4 * (float4) ONE_OVER_255;
-    pix_f24->f4[0] += adjustment_f4;
-    pix_f24->f4[1] += adjustment_f4;
-    pix_f24->f4[4] -= adjustment_f4;
-    pix_f24->f4[5] -= adjustment_f4;
+    pix_f24->f4[0] -= adjustment_f4;
+    pix_f24->f4[1] -= adjustment_f4;
+    pix_f24->f4[4] += adjustment_f4;
+    pix_f24->f4[5] += adjustment_f4;
 }
 
 __device__ void color_temperature_hip_compute(signed char *srcPtr, d_float24 *pix_f24, float4 *adjustmentValue_f4)
 {
-     pix_f24->f4[0] += *adjustmentValue_f4;
-    pix_f24->f4[1] += *adjustmentValue_f4;
-    pix_f24->f4[4] -= *adjustmentValue_f4;
-    pix_f24->f4[5] -= *adjustmentValue_f4;
+    pix_f24->f4[0] -= *adjustmentValue_f4;
+    pix_f24->f4[1] -= *adjustmentValue_f4;
+    pix_f24->f4[4] += *adjustmentValue_f4;
+    pix_f24->f4[5] += *adjustmentValue_f4;
 }
 
 __device__ void color_temperature_hip_compute(half *srcPtr, d_float24 *pix_f24, float4 *adjustmentValue_f4)
 {
     float4 adjustment_f4 = *adjustmentValue_f4 * (float4) ONE_OVER_255;
-    pix_f24->f4[0] += adjustment_f4;
-    pix_f24->f4[1] += adjustment_f4;
-    pix_f24->f4[4] -= adjustment_f4;
-    pix_f24->f4[5] -= adjustment_f4;
+    pix_f24->f4[0] -= adjustment_f4;
+    pix_f24->f4[1] -= adjustment_f4;
+    pix_f24->f4[4] += adjustment_f4;
+    pix_f24->f4[5] += adjustment_f4;
 }
 
 template <typename T>
