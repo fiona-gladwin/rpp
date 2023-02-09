@@ -193,6 +193,10 @@ int main(int argc, char **argv)
         strcpy(funcName, "dilate");
         outputFormatToggle = 0;
         break;
+    case 45:
+        strcpy(funcName, "color_temperature");
+        outputFormatToggle = 0;
+        break;
     case 49:
         strcpy(funcName, "box_filter");
         outputFormatToggle = 0;
@@ -1681,6 +1685,57 @@ int main(int argc, char **argv)
                 missingFuncFlag = 1;
             else if (ip_bitDepth == 5)
                 rppt_dilate_gpu(d_inputi8, srcDescPtr, d_outputi8, dstDescPtr, kernelSize, roiTensorPtrSrc, roiTypeSrc, handle);
+            else if (ip_bitDepth == 6)
+                missingFuncFlag = 1;
+            else
+                missingFuncFlag = 1;
+
+            break;
+        }
+        case 45:
+        {
+            test_case_name = "color_temperature";
+
+            Rpp32s adjustmentValueTensor[images];
+            for (i = 0; i < images; i++)
+            {
+                adjustmentValueTensor[i] = 70;
+            }
+
+            // Uncomment to run test case with an xywhROI override
+            /*for (i = 0; i < images; i++)
+            {
+                roiTensorPtrSrc[i].xywhROI.xy.x = 0;
+                roiTensorPtrSrc[i].xywhROI.xy.y = 0;
+                roiTensorPtrSrc[i].xywhROI.roiWidth = 100;
+                roiTensorPtrSrc[i].xywhROI.roiHeight = 180;
+            }*/
+
+            // Uncomment to run test case with an ltrbROI override
+            /*for (i = 0; i < images; i++)
+            {
+                roiTensorPtrSrc[i].ltrbROI.lt.x = 50;
+                roiTensorPtrSrc[i].ltrbROI.lt.y = 30;
+                roiTensorPtrSrc[i].ltrbROI.rb.x = 210;
+                roiTensorPtrSrc[i].ltrbROI.rb.y = 210;
+            }
+            roiTypeSrc = RpptRoiType::LTRB;
+            roiTypeDst = RpptRoiType::LTRB;*/
+
+            start = clock();
+            
+            if (ip_bitDepth == 0)
+                rppt_color_temperature_gpu(d_input, srcDescPtr, d_output, dstDescPtr, adjustmentValueTensor, roiTensorPtrSrc, roiTypeSrc, handle);
+            else if (ip_bitDepth == 1)
+                rppt_color_temperature_gpu(d_inputf16, srcDescPtr, d_outputf16, dstDescPtr, adjustmentValueTensor, roiTensorPtrSrc, roiTypeSrc, handle);
+            else if (ip_bitDepth == 2)
+                rppt_color_temperature_gpu(d_inputf32, srcDescPtr, d_outputf32, dstDescPtr, adjustmentValueTensor, roiTensorPtrSrc, roiTypeSrc, handle);
+            else if (ip_bitDepth == 3)
+                missingFuncFlag = 1;
+            else if (ip_bitDepth == 4)
+                missingFuncFlag = 1;
+            else if (ip_bitDepth == 5)
+                rppt_color_temperature_gpu(d_inputi8, srcDescPtr, d_outputi8, dstDescPtr, adjustmentValueTensor, roiTensorPtrSrc, roiTypeSrc, handle);
             else if (ip_bitDepth == 6)
                 missingFuncFlag = 1;
             else
