@@ -6,15 +6,13 @@
 
 inline void compute_vignette_48_host(__m256 *p, __m256 &pMultiplier, __m256 &pILocComponent, __m256 &pJLocComponent)
 {
-    __m256 pDistance, pGaussianValue;
-    pDistance = _mm256_add_ps(_mm256_mul_ps(pJLocComponent, pJLocComponent), pILocComponent);
-    pGaussianValue = fast_exp_avx(_mm256_mul_ps(pDistance, pMultiplier));
+    __m256 pGaussianValue;
+    pGaussianValue = exp_avx(_mm256_mul_ps(_mm256_fmadd_ps(pJLocComponent, pJLocComponent, pILocComponent), pMultiplier));
     p[0] = _mm256_mul_ps(p[0], pGaussianValue);    // vignette adjustment
     p[2] = _mm256_mul_ps(p[2], pGaussianValue);    // vignette adjustment
     p[4] = _mm256_mul_ps(p[4], pGaussianValue);    // vignette adjustment
     pJLocComponent = _mm256_add_ps(pJLocComponent, avx_p8);
-    pDistance = _mm256_add_ps(_mm256_mul_ps(pJLocComponent, pJLocComponent), pILocComponent);
-    pGaussianValue = fast_exp_avx(_mm256_mul_ps(pDistance, pMultiplier));
+    pGaussianValue = exp_avx(_mm256_mul_ps(_mm256_fmadd_ps(pJLocComponent, pJLocComponent, pILocComponent), pMultiplier));
     p[1] = _mm256_mul_ps(p[1], pGaussianValue);    // vignette adjustment
     p[3] = _mm256_mul_ps(p[3], pGaussianValue);    // vignette adjustment
     p[5] = _mm256_mul_ps(p[5], pGaussianValue);    // vignette adjustment
@@ -23,9 +21,8 @@ inline void compute_vignette_48_host(__m256 *p, __m256 &pMultiplier, __m256 &pIL
 
 inline void compute_vignette_24_host(__m256 *p, __m256 &pMultiplier, __m256 &pILocComponent, __m256 &pJLocComponent)
 {
-    __m256 pDistance, pGaussianValue;
-    pDistance = _mm256_add_ps(_mm256_mul_ps(pJLocComponent, pJLocComponent), pILocComponent);
-    pGaussianValue = fast_exp_avx(_mm256_mul_ps(pDistance, pMultiplier));
+    __m256 pGaussianValue;
+    pGaussianValue = exp_avx(_mm256_mul_ps(_mm256_fmadd_ps(pJLocComponent, pJLocComponent, pILocComponent), pMultiplier));
     p[0] = _mm256_mul_ps(p[0], pGaussianValue);    // vignette adjustment
     p[1] = _mm256_mul_ps(p[1], pGaussianValue);    // vignette adjustment
     p[2] = _mm256_mul_ps(p[2], pGaussianValue);    // vignette adjustment
@@ -34,22 +31,19 @@ inline void compute_vignette_24_host(__m256 *p, __m256 &pMultiplier, __m256 &pIL
 
 inline void compute_vignette_16_host(__m256 *p, __m256 &pMultiplier, __m256 &pILocComponent, __m256 &pJLocComponent)
 {
-    __m256 pDistance, pGaussianValue;
-    pDistance = _mm256_add_ps(_mm256_mul_ps(pJLocComponent, pJLocComponent), pILocComponent);
-    pGaussianValue = fast_exp_avx(_mm256_mul_ps(pDistance, pMultiplier));
+    __m256 pGaussianValue;
+    pGaussianValue = exp_avx(_mm256_mul_ps(_mm256_fmadd_ps(pJLocComponent, pJLocComponent, pILocComponent), pMultiplier));
     p[0] = _mm256_mul_ps(p[0], pGaussianValue);    // vignette adjustment
     pJLocComponent = _mm256_add_ps(pJLocComponent, avx_p8);
-    pDistance = _mm256_add_ps(_mm256_mul_ps(pJLocComponent, pJLocComponent), pILocComponent);
-    pGaussianValue = fast_exp_avx(_mm256_mul_ps(pDistance, pMultiplier));
+    pGaussianValue = exp_avx(_mm256_mul_ps(_mm256_fmadd_ps(pJLocComponent, pJLocComponent, pILocComponent), pMultiplier));
     p[1] = _mm256_mul_ps(p[1], pGaussianValue);    // vignette adjustment
     pJLocComponent = _mm256_add_ps(pJLocComponent, avx_p8);
 }
 
 inline void compute_vignette_8_host(__m256 *p, __m256 &pMultiplier, __m256 &pILocComponent, __m256 &pJLocComponent)
 {
-    __m256 pDistance, pGaussianValue;
-    pDistance = _mm256_add_ps(_mm256_mul_ps(pJLocComponent, pJLocComponent), pILocComponent);
-    pGaussianValue = fast_exp_avx(_mm256_mul_ps(pDistance, pMultiplier));
+    __m256 pGaussianValue;
+    pGaussianValue = exp_avx(_mm256_mul_ps(_mm256_fmadd_ps(pJLocComponent, pJLocComponent, pILocComponent), pMultiplier));
     p[0] = _mm256_mul_ps(p[0], pGaussianValue);    // vignette adjustment
     pJLocComponent = _mm256_add_ps(pJLocComponent, avx_p8);
 }
@@ -79,7 +73,7 @@ RppStatus vignette_u8_u8_host_tensor(Rpp8u *srcPtr,
         Rpp32s halfHeight = (Rpp32s) (roi.xywhROI.roiHeight >> 1);
         Rpp32s halfWidth = (Rpp32s) (roi.xywhROI.roiWidth >> 1);
         Rpp32f radius = std::max(halfHeight, halfWidth);
-        Rpp32f multiplier = -(0.5f * intensity) / (radius * radius);
+        Rpp32f multiplier = -(0.25f * intensity) / (radius * radius);
 
         Rpp8u *srcPtrImage, *dstPtrImage;
         srcPtrImage = srcPtr + batchCount * srcDescPtr->strides.nStride;
@@ -135,9 +129,9 @@ RppStatus vignette_u8_u8_host_tensor(Rpp8u *srcPtr,
                     Rpp32f jLocComponent = jLoc * jLoc;
                     Rpp32f gaussianValue = std::exp((iLocComponent + jLocComponent) * multiplier);
 
-                    *dstPtrTempR = (Rpp8u) RPPPIXELCHECK((Rpp32f)srcPtrTemp[0] * gaussianValue);
-                    *dstPtrTempG = (Rpp8u) RPPPIXELCHECK((Rpp32f)srcPtrTemp[1] * gaussianValue);
-                    *dstPtrTempB = (Rpp8u) RPPPIXELCHECK((Rpp32f)srcPtrTemp[2] * gaussianValue);
+                    *dstPtrTempR = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)srcPtrTemp[0] * gaussianValue));
+                    *dstPtrTempG = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)srcPtrTemp[1] * gaussianValue));
+                    *dstPtrTempB = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)srcPtrTemp[2] * gaussianValue));
 
                     srcPtrTemp += 3;
                     dstPtrTempR++;
@@ -192,9 +186,9 @@ RppStatus vignette_u8_u8_host_tensor(Rpp8u *srcPtr,
                     Rpp32f jLocComponent = jLoc * jLoc;
                     Rpp32f gaussianValue = std::exp((iLocComponent + jLocComponent) * multiplier);
 
-                    dstPtrTemp[0] = (Rpp8u) RPPPIXELCHECK((Rpp32f)*srcPtrTempR * gaussianValue);
-                    dstPtrTemp[1] = (Rpp8u) RPPPIXELCHECK((Rpp32f)*srcPtrTempG * gaussianValue);
-                    dstPtrTemp[2] = (Rpp8u) RPPPIXELCHECK((Rpp32f)*srcPtrTempB * gaussianValue);
+                    dstPtrTemp[0] = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)*srcPtrTempR * gaussianValue));
+                    dstPtrTemp[1] = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)*srcPtrTempG * gaussianValue));
+                    dstPtrTemp[2] = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)*srcPtrTempB * gaussianValue));
 
                     srcPtrTempR++;
                     srcPtrTempG++;
@@ -243,9 +237,9 @@ RppStatus vignette_u8_u8_host_tensor(Rpp8u *srcPtr,
                     Rpp32f jLocComponent = jLoc * jLoc;
                     Rpp32f gaussianValue = std::exp((iLocComponent + jLocComponent) * multiplier);
 
-                    dstPtrTemp[0] = (Rpp8u) RPPPIXELCHECK((Rpp32f)srcPtrTemp[0] * gaussianValue);
-                    dstPtrTemp[1] = (Rpp8u) RPPPIXELCHECK((Rpp32f)srcPtrTemp[1] * gaussianValue);
-                    dstPtrTemp[2] = (Rpp8u) RPPPIXELCHECK((Rpp32f)srcPtrTemp[2] * gaussianValue);
+                    dstPtrTemp[0] = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)srcPtrTemp[0] * gaussianValue));
+                    dstPtrTemp[1] = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)srcPtrTemp[1] * gaussianValue));
+                    dstPtrTemp[2] = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)srcPtrTemp[2] * gaussianValue));
 
                     srcPtrTemp += 3;
                     dstPtrTemp += 3;
@@ -302,9 +296,9 @@ RppStatus vignette_u8_u8_host_tensor(Rpp8u *srcPtr,
                     Rpp32f jLocComponent = jLoc * jLoc;
                     Rpp32f gaussianValue = std::exp((iLocComponent + jLocComponent) * multiplier);
 
-                    *dstPtrTempR = (Rpp8u) RPPPIXELCHECK((Rpp32f)*srcPtrTempR * gaussianValue);
-                    *dstPtrTempG = (Rpp8u) RPPPIXELCHECK((Rpp32f)*srcPtrTempG * gaussianValue);
-                    *dstPtrTempB = (Rpp8u) RPPPIXELCHECK((Rpp32f)*srcPtrTempB * gaussianValue);
+                    *dstPtrTempR = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)*srcPtrTempR * gaussianValue));
+                    *dstPtrTempG = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)*srcPtrTempG * gaussianValue));
+                    *dstPtrTempB = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)*srcPtrTempB * gaussianValue));
 
                     srcPtrTempR++;
                     srcPtrTempG++;
@@ -356,7 +350,7 @@ RppStatus vignette_u8_u8_host_tensor(Rpp8u *srcPtr,
                     Rpp32s jLoc = vectorLoopCount - halfWidth;
                     Rpp32f jLocComponent = jLoc * jLoc;
                     Rpp32f gaussianValue = std::exp((iLocComponent + jLocComponent) * multiplier);
-                    *dstPtrTemp = (Rpp8u) RPPPIXELCHECK((Rpp32f)*srcPtrTemp * gaussianValue);
+                    *dstPtrTemp = (Rpp8u) RPPPIXELCHECK(nearbyintf((Rpp32f)*srcPtrTemp * gaussianValue));
                     srcPtrTemp++;
                     dstPtrTemp++;
                 }
@@ -393,7 +387,7 @@ RppStatus vignette_f32_f32_host_tensor(Rpp32f *srcPtr,
         Rpp32s halfHeight = (Rpp32s) (roi.xywhROI.roiHeight >> 1);
         Rpp32s halfWidth = (Rpp32s) (roi.xywhROI.roiWidth >> 1);
         Rpp32f radius = std::max(halfHeight, halfWidth);
-        Rpp32f multiplier = -(0.5f * intensity) / (radius * radius);
+        Rpp32f multiplier = -(0.25f * intensity) / (radius * radius);
 
         Rpp32f *srcPtrImage, *dstPtrImage;
         srcPtrImage = srcPtr + batchCount * srcDescPtr->strides.nStride;
@@ -707,7 +701,7 @@ RppStatus vignette_i8_i8_host_tensor(Rpp8s *srcPtr,
         Rpp32s halfHeight = (Rpp32s) (roi.xywhROI.roiHeight >> 1);
         Rpp32s halfWidth = (Rpp32s) (roi.xywhROI.roiWidth >> 1);
         Rpp32f radius = std::max(halfHeight, halfWidth);
-        Rpp32f multiplier = -(0.5f * intensity) / (radius * radius);
+        Rpp32f multiplier = -(0.25f * intensity) / (radius * radius);
 
         Rpp8s *srcPtrImage, *dstPtrImage;
         srcPtrImage = srcPtr + batchCount * srcDescPtr->strides.nStride;
@@ -767,9 +761,9 @@ RppStatus vignette_i8_i8_host_tensor(Rpp8s *srcPtr,
                     srcPtrTempI8[1] = (Rpp32f)srcPtrTemp[1] + 128;
                     srcPtrTempI8[2] = (Rpp32f)srcPtrTemp[2] + 128;
 
-                    *dstPtrTempR = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[0] * gaussianValue) - 128);
-                    *dstPtrTempG = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[1] * gaussianValue) - 128);
-                    *dstPtrTempB = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[2] * gaussianValue) - 128);
+                    *dstPtrTempR = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[0] * gaussianValue) - 128);
+                    *dstPtrTempG = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[1] * gaussianValue) - 128);
+                    *dstPtrTempB = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[2] * gaussianValue) - 128);
 
                     srcPtrTemp += 3;
                     dstPtrTempR++;
@@ -828,9 +822,9 @@ RppStatus vignette_i8_i8_host_tensor(Rpp8s *srcPtr,
                     srcPtrTempI8[1] = (Rpp32f)*srcPtrTempG + 128;
                     srcPtrTempI8[2] = (Rpp32f)*srcPtrTempB + 128;
 
-                    dstPtrTemp[0] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[0] * gaussianValue) - 128);
-                    dstPtrTemp[1] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[1] * gaussianValue) - 128);
-                    dstPtrTemp[2] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[2] * gaussianValue) - 128);
+                    dstPtrTemp[0] = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[0] * gaussianValue) - 128);
+                    dstPtrTemp[1] = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[1] * gaussianValue) - 128);
+                    dstPtrTemp[2] = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[2] * gaussianValue) - 128);
 
                     srcPtrTempR++;
                     srcPtrTempG++;
@@ -883,9 +877,9 @@ RppStatus vignette_i8_i8_host_tensor(Rpp8s *srcPtr,
                     srcPtrTempI8[1] = (Rpp32f)srcPtrTemp[1] + 128;
                     srcPtrTempI8[2] = (Rpp32f)srcPtrTemp[2] + 128;
 
-                    dstPtrTemp[0] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[0] * gaussianValue) - 128);
-                    dstPtrTemp[1] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[1] * gaussianValue) - 128);
-                    dstPtrTemp[2] = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[2] * gaussianValue) - 128);
+                    dstPtrTemp[0] = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[0] * gaussianValue) - 128);
+                    dstPtrTemp[1] = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[1] * gaussianValue) - 128);
+                    dstPtrTemp[2] = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[2] * gaussianValue) - 128);
 
                     srcPtrTemp += 3;
                     dstPtrTemp += 3;
@@ -946,9 +940,9 @@ RppStatus vignette_i8_i8_host_tensor(Rpp8s *srcPtr,
                     srcPtrTempI8[1] = (Rpp32f)*srcPtrTempG + 128;
                     srcPtrTempI8[2] = (Rpp32f)*srcPtrTempB + 128;
 
-                    *dstPtrTempR = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[0] * gaussianValue) - 128);
-                    *dstPtrTempG = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[1] * gaussianValue) - 128);
-                    *dstPtrTempB = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8[2] * gaussianValue) - 128);
+                    *dstPtrTempR = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[0] * gaussianValue) - 128);
+                    *dstPtrTempG = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[1] * gaussianValue) - 128);
+                    *dstPtrTempB = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8[2] * gaussianValue) - 128);
 
                     srcPtrTempR++;
                     srcPtrTempG++;
@@ -1003,7 +997,7 @@ RppStatus vignette_i8_i8_host_tensor(Rpp8s *srcPtr,
                     Rpp32f srcPtrTempI8;
                     srcPtrTempI8 = (Rpp32f)*srcPtrTemp + 128;
 
-                    *dstPtrTemp = (Rpp8s) RPPPIXELCHECKI8((srcPtrTempI8 * gaussianValue) - 128);
+                    *dstPtrTemp = (Rpp8s) RPPPIXELCHECKI8(nearbyintf(srcPtrTempI8 * gaussianValue) - 128);
                     srcPtrTemp++;
                     dstPtrTemp++;
                 }
@@ -1040,7 +1034,7 @@ RppStatus vignette_f16_f16_host_tensor(Rpp16f *srcPtr,
         Rpp32s halfHeight = (Rpp32s) (roi.xywhROI.roiHeight >> 1);
         Rpp32s halfWidth = (Rpp32s) (roi.xywhROI.roiWidth >> 1);
         Rpp32f radius = std::max(halfHeight, halfWidth);
-        Rpp32f multiplier = -(0.5f * intensity) / (radius * radius);
+        Rpp32f multiplier = -(0.25f * intensity) / (radius * radius);
 
         Rpp16f *srcPtrImage, *dstPtrImage;
         srcPtrImage = srcPtr + batchCount * srcDescPtr->strides.nStride;

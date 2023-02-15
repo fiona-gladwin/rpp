@@ -1644,6 +1644,22 @@ static inline __m256 fast_exp_avx(__m256 x)
     r = _mm256_castsi256_ps(_mm256_add_epi32(j, _mm256_castps_si256(p)));    /* r = p * 2^i*/
     return r;
 }
+
+inline __m256 exp_avx(__m256 a)
+{
+    float element[8];
+    _mm256_storeu_ps(element, a);
+    return _mm256_setr_ps(
+    expf(element[0]),
+    expf(element[1]),
+    expf(element[2]),
+    expf(element[3]),
+    expf(element[4]),
+    expf(element[5]),
+    expf(element[6]),
+    expf(element[7])
+    );
+}
 #endif
 
 #define set1_ps_hex(x) _mm_castsi128_ps(_mm_set1_epi32(x))

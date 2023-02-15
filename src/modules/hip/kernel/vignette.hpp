@@ -1,24 +1,45 @@
 #include <hip/hip_runtime.h>
 #include "rpp_hip_common.hpp"
 
+__device__ void vignette_gaussian_8_adjusted_input_hip_compute(uchar *srcPtr, d_float8 *pix_f8) { rpp_hip_math_multiply8_const(pix_f8, pix_f8, (float4)ONE_OVER_255);}
+__device__ void vignette_gaussian_8_adjusted_input_hip_compute(float *srcPtr, d_float8 *pix_f8) { }
+__device__ void vignette_gaussian_8_adjusted_input_hip_compute(schar *srcPtr, d_float8 *pix_f8) { }
+__device__ void vignette_gaussian_8_adjusted_input_hip_compute(half *srcPtr, d_float8 *pix_f8) { }
+
+__device__ void vignette_gaussian_24_adjusted_input_hip_compute(uchar *srcPtr, d_float24 *pix_f24) { rpp_hip_math_multiply24_const(pix_f24, pix_f24, (float4)ONE_OVER_255);}
+__device__ void vignette_gaussian_24_adjusted_input_hip_compute(float *srcPtr, d_float24 *pix_f24) { }
+__device__ void vignette_gaussian_24_adjusted_input_hip_compute(schar *srcPtr, d_float24 *pix_f24) { }
+__device__ void vignette_gaussian_24_adjusted_input_hip_compute(half *srcPtr, d_float24 *pix_f24) { }
+
+__device__ void vignette_gaussian_8_adjusted_output_hip_compute(uchar *srcPtr, d_float8 *pix_f8) { rpp_hip_math_multiply8_const(pix_f8, pix_f8, (float4)255.0f);}
+__device__ void vignette_gaussian_8_adjusted_output_hip_compute(float *srcPtr, d_float8 *pix_f8) { }
+__device__ void vignette_gaussian_8_adjusted_output_hip_compute(schar *srcPtr, d_float8 *pix_f8) { }
+__device__ void vignette_gaussian_8_adjusted_output_hip_compute(half *srcPtr, d_float8 *pix_f8) { }
+
+__device__ void vignette_gaussian_24_adjusted_output_hip_compute(uchar *srcPtr, d_float24 *pix_f24) { rpp_hip_math_multiply24_const(pix_f24, pix_f24, (float4)255.0f);}
+__device__ void vignette_gaussian_24_adjusted_output_hip_compute(float *srcPtr, d_float24 *pix_f24) { }
+__device__ void vignette_gaussian_24_adjusted_output_hip_compute(schar *srcPtr, d_float24 *pix_f24) { }
+__device__ void vignette_gaussian_24_adjusted_output_hip_compute(half *srcPtr, d_float24 *pix_f24) { }
+
 __device__ void vignette_gaussian_hip_compute(float &multiplier, int2 &halfDimsWH_i2, int2 &idXY_i2, d_float8 *gaussianValue_f8)
 {
     float rowLocComponent;
     rowLocComponent = idXY_i2.y - halfDimsWH_i2.y;
     rowLocComponent *= (rowLocComponent);
 
-    d_float8 colLocComponent_f8;
     float4 rowLocComponent_f4 = (float4)rowLocComponent;
     float4 multiplier_f4 = (float4)multiplier;
 
+    d_float8 colLocComponent_f8;
     colLocComponent_f8.f4[0] = make_float4(idXY_i2.x, idXY_i2.x + 1, idXY_i2.x + 2, idXY_i2.x + 3);
     colLocComponent_f8.f4[1] = colLocComponent_f8.f4[0] + (float4)4;
     colLocComponent_f8.f4[0] -= (float4)halfDimsWH_i2.x;
     colLocComponent_f8.f4[1] -= (float4)halfDimsWH_i2.x;
     colLocComponent_f8.f4[0] = (colLocComponent_f8.f4[0] * colLocComponent_f8.f4[0]) + rowLocComponent_f4;
     colLocComponent_f8.f4[1] = (colLocComponent_f8.f4[1] * colLocComponent_f8.f4[1]) + rowLocComponent_f4;
-    colLocComponent_f8.f4[0] = multiplier_f4 * colLocComponent_f8.f4[0];
-    colLocComponent_f8.f4[1] = multiplier_f4 * colLocComponent_f8.f4[1];
+    colLocComponent_f8.f4[0] = colLocComponent_f8.f4[0] * multiplier_f4;
+    colLocComponent_f8.f4[1] = colLocComponent_f8.f4[1] * multiplier_f4;
+
     gaussianValue_f8->f4[0] = make_float4(expf(colLocComponent_f8.f4[0].x), expf(colLocComponent_f8.f4[0].y), expf(colLocComponent_f8.f4[0].z), expf(colLocComponent_f8.f4[0].w));
     gaussianValue_f8->f4[1] = make_float4(expf(colLocComponent_f8.f4[1].x), expf(colLocComponent_f8.f4[1].y), expf(colLocComponent_f8.f4[1].z), expf(colLocComponent_f8.f4[1].w));
 }
@@ -27,24 +48,47 @@ __device__ void vignette_8_hip_compute(uchar *srcPtr, d_float8 *src_f8, d_float8
 {
     dst_f8->f4[0] = src_f8->f4[0] * gaussianValue_f8->f4[0];
     dst_f8->f4[1] = src_f8->f4[1] * gaussianValue_f8->f4[1];
+    dst_f8->f1[0] = nearbyintf(dst_f8->f1[0]);
+    dst_f8->f1[1] = nearbyintf(dst_f8->f1[1]);
+    dst_f8->f1[2] = nearbyintf(dst_f8->f1[2]);
+    dst_f8->f1[3] = nearbyintf(dst_f8->f1[3]);
+    dst_f8->f1[4] = nearbyintf(dst_f8->f1[4]);
+    dst_f8->f1[5] = nearbyintf(dst_f8->f1[5]);
+    dst_f8->f1[6] = nearbyintf(dst_f8->f1[6]);
+    dst_f8->f1[7] = nearbyintf(dst_f8->f1[7]);
+    rpp_hip_pixel_check_0to255(dst_f8);
 }
 
 __device__ void vignette_8_hip_compute(float *srcPtr, d_float8 *src_f8, d_float8 *dst_f8, d_float8 *gaussianValue_f8)
 {
     dst_f8->f4[0] = src_f8->f4[0] * gaussianValue_f8->f4[0];
     dst_f8->f4[1] = src_f8->f4[1] * gaussianValue_f8->f4[1];
+    rpp_hip_pixel_check_0to1(dst_f8);
 }
 
 __device__ void vignette_8_hip_compute(signed char *srcPtr, d_float8 *src_f8, d_float8 *dst_f8, d_float8 *gaussianValue_f8)
 {
-    dst_f8->f4[0] = ((src_f8->f4[0] + (float4)128) * gaussianValue_f8->f4[0]) - (float4)128;
-    dst_f8->f4[1] = ((src_f8->f4[1] + (float4)128) * gaussianValue_f8->f4[1]) - (float4)128;
+    float4 i8Offset_f4 = (float4) 128.0f;
+    rpp_hip_math_add8_const(src_f8, src_f8, i8Offset_f4);
+    dst_f8->f4[0] = src_f8->f4[0] * gaussianValue_f8->f4[0];
+    dst_f8->f4[1] = src_f8->f4[1] * gaussianValue_f8->f4[1];
+    dst_f8->f1[0] = nearbyintf(dst_f8->f1[0]);
+    dst_f8->f1[1] = nearbyintf(dst_f8->f1[1]);
+    dst_f8->f1[2] = nearbyintf(dst_f8->f1[2]);
+    dst_f8->f1[3] = nearbyintf(dst_f8->f1[3]);
+    dst_f8->f1[4] = nearbyintf(dst_f8->f1[4]);
+    dst_f8->f1[5] = nearbyintf(dst_f8->f1[5]);
+    dst_f8->f1[6] = nearbyintf(dst_f8->f1[6]);
+    dst_f8->f1[7] = nearbyintf(dst_f8->f1[7]);
+    rpp_hip_pixel_check_0to255(dst_f8);
+    rpp_hip_math_subtract8_const(dst_f8, dst_f8, i8Offset_f4);
 }
 
 __device__ void vignette_8_hip_compute(half *srcPtr, d_float8 *src_f8, d_float8 *dst_f8, d_float8 *gaussianValue_f8)
 {
     dst_f8->f4[0] = src_f8->f4[0] * gaussianValue_f8->f4[0];
     dst_f8->f4[1] = src_f8->f4[1] * gaussianValue_f8->f4[1];
+    rpp_hip_pixel_check_0to1(dst_f8);
 }
 
 template <typename T>
@@ -79,14 +123,15 @@ __global__ void vignette_pkd_tensor(T *srcPtr,
     int2 halfDimsWH_i2 = make_int2(roiTensorPtrSrc[id_z].xywhROI.roiWidth >> 1, roiTensorPtrSrc[id_z].xywhROI.roiHeight >> 1);
     int2 idXY_i2 = make_int2(id_x, id_y);
     float radius = fmaxf(halfDimsWH_i2.x, halfDimsWH_i2.y);
-    float multiplier = -(0.5f * intensity) / (radius * radius);
+    float multiplier = -(0.25f * intensity) / (radius * radius);
 
     d_float24 src_f24, dst_f24;
     d_float8 gaussianValue_f8;
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
-
     rpp_hip_load24_pkd3_and_unpack_to_float24_pln3(srcPtr + srcIdx, &src_f24);
+    vignette_gaussian_24_adjusted_input_hip_compute(srcPtr, &src_f24);
     vignette_24_hip_compute(srcPtr, &src_f24, &dst_f24, &gaussianValue_f8);
+    vignette_gaussian_24_adjusted_output_hip_compute(srcPtr, &src_f24);
     rpp_hip_pack_float24_pln3_and_store24_pkd3(dstPtr + dstIdx, &dst_f24);
 }
 
@@ -115,14 +160,16 @@ __global__ void vignette_pln_tensor(T *srcPtr,
     int2 halfDimsWH_i2 = make_int2(roiTensorPtrSrc[id_z].xywhROI.roiWidth >> 1, roiTensorPtrSrc[id_z].xywhROI.roiHeight >> 1);
     int2 idXY_i2 = make_int2(id_x, id_y);
     float radius = fmaxf(halfDimsWH_i2.x, halfDimsWH_i2.y);
-    float multiplier = -(0.5f * intensity) / (radius * radius);
+    float multiplier = -(0.25f * intensity) / (radius * radius);
 
     d_float8 src_f8, dst_f8;
     d_float8 gaussianValue_f8;
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
 
     rpp_hip_load8_and_unpack_to_float8(srcPtr + srcIdx, &src_f8);
+    vignette_gaussian_8_adjusted_input_hip_compute(srcPtr, &src_f8);
     vignette_8_hip_compute(srcPtr, &src_f8, &dst_f8, &gaussianValue_f8);
+    vignette_gaussian_8_adjusted_output_hip_compute(srcPtr, &src_f8);
     rpp_hip_pack_float8_and_store8(dstPtr + dstIdx, &dst_f8);
 
     if (channelsDst == 3)
@@ -131,14 +178,18 @@ __global__ void vignette_pln_tensor(T *srcPtr,
         dstIdx += dstStridesNCH.y;
 
         rpp_hip_load8_and_unpack_to_float8(srcPtr + srcIdx, &src_f8);
+        vignette_gaussian_8_adjusted_input_hip_compute(srcPtr, &src_f8);
         vignette_8_hip_compute(srcPtr, &src_f8, &dst_f8, &gaussianValue_f8);
+        vignette_gaussian_8_adjusted_output_hip_compute(srcPtr, &src_f8);
         rpp_hip_pack_float8_and_store8(dstPtr + dstIdx, &dst_f8);
 
         srcIdx += srcStridesNCH.y;
         dstIdx += dstStridesNCH.y;
 
         rpp_hip_load8_and_unpack_to_float8(srcPtr + srcIdx, &src_f8);
+        vignette_gaussian_8_adjusted_input_hip_compute(srcPtr, &src_f8);
         vignette_8_hip_compute(srcPtr, &src_f8, &dst_f8, &gaussianValue_f8);
+        vignette_gaussian_8_adjusted_output_hip_compute(srcPtr, &src_f8);
         rpp_hip_pack_float8_and_store8(dstPtr + dstIdx, &dst_f8);
     }
 }
@@ -167,14 +218,16 @@ __global__ void vignette_pkd3_pln3_tensor(T *srcPtr,
     int2 halfDimsWH_i2 = make_int2(roiTensorPtrSrc[id_z].xywhROI.roiWidth >> 1, roiTensorPtrSrc[id_z].xywhROI.roiHeight >> 1);
     int2 idXY_i2 = make_int2(id_x, id_y);
     float radius = fmaxf(halfDimsWH_i2.x, halfDimsWH_i2.y);
-    float multiplier = -(0.5f * intensity) / (radius * radius);
+    float multiplier = -(0.25f * intensity) / (radius * radius);
 
     d_float24 src_f24, dst_f24;
     d_float8 gaussianValue_f8;
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
 
     rpp_hip_load24_pkd3_and_unpack_to_float24_pln3(srcPtr + srcIdx, &src_f24);
+    vignette_gaussian_24_adjusted_input_hip_compute(srcPtr, &src_f24);
     vignette_24_hip_compute(srcPtr, &src_f24, &dst_f24, &gaussianValue_f8);
+    vignette_gaussian_24_adjusted_output_hip_compute(srcPtr, &src_f24);
     rpp_hip_pack_float24_pln3_and_store24_pln3(dstPtr + dstIdx, dstStridesNCH.y, &dst_f24);
 }
 
@@ -202,14 +255,16 @@ __global__ void vignette_pln3_pkd3_tensor(T *srcPtr,
     int2 halfDimsWH_i2 = make_int2(roiTensorPtrSrc[id_z].xywhROI.roiWidth >> 1, roiTensorPtrSrc[id_z].xywhROI.roiHeight >> 1);
     int2 idXY_i2 = make_int2(id_x, id_y);
     float radius = fmaxf(halfDimsWH_i2.x, halfDimsWH_i2.y);
-    float multiplier = -(0.5f * intensity) / (radius * radius);
+    float multiplier = -(0.25f * intensity) / (radius * radius);
 
     d_float24 src_f24, dst_f24;
     d_float8 gaussianValue_f8;
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
 
     rpp_hip_load24_pln3_and_unpack_to_float24_pln3(srcPtr + srcIdx, srcStridesNCH.y, &src_f24);
+    vignette_gaussian_24_adjusted_input_hip_compute(srcPtr, &src_f24);
     vignette_24_hip_compute(srcPtr, &src_f24, &dst_f24, &gaussianValue_f8);
+    vignette_gaussian_24_adjusted_output_hip_compute(srcPtr, &src_f24);
     rpp_hip_pack_float24_pln3_and_store24_pkd3(dstPtr + dstIdx, &dst_f24);
 }
 
