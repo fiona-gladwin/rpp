@@ -1,26 +1,6 @@
 #include <hip/hip_runtime.h>
 #include "rpp_hip_common.hpp"
 
-__device__ void vignette_gaussian_8_adjusted_input_hip_compute(uchar *srcPtr, d_float8 *pix_f8) { rpp_hip_math_multiply8_const(pix_f8, pix_f8, (float4)ONE_OVER_255);}
-__device__ void vignette_gaussian_8_adjusted_input_hip_compute(float *srcPtr, d_float8 *pix_f8) { }
-__device__ void vignette_gaussian_8_adjusted_input_hip_compute(schar *srcPtr, d_float8 *pix_f8) { }
-__device__ void vignette_gaussian_8_adjusted_input_hip_compute(half *srcPtr, d_float8 *pix_f8) { }
-
-__device__ void vignette_gaussian_24_adjusted_input_hip_compute(uchar *srcPtr, d_float24 *pix_f24) { rpp_hip_math_multiply24_const(pix_f24, pix_f24, (float4)ONE_OVER_255);}
-__device__ void vignette_gaussian_24_adjusted_input_hip_compute(float *srcPtr, d_float24 *pix_f24) { }
-__device__ void vignette_gaussian_24_adjusted_input_hip_compute(schar *srcPtr, d_float24 *pix_f24) { }
-__device__ void vignette_gaussian_24_adjusted_input_hip_compute(half *srcPtr, d_float24 *pix_f24) { }
-
-__device__ void vignette_gaussian_8_adjusted_output_hip_compute(uchar *srcPtr, d_float8 *pix_f8) { rpp_hip_math_multiply8_const(pix_f8, pix_f8, (float4)255.0f);}
-__device__ void vignette_gaussian_8_adjusted_output_hip_compute(float *srcPtr, d_float8 *pix_f8) { }
-__device__ void vignette_gaussian_8_adjusted_output_hip_compute(schar *srcPtr, d_float8 *pix_f8) { }
-__device__ void vignette_gaussian_8_adjusted_output_hip_compute(half *srcPtr, d_float8 *pix_f8) { }
-
-__device__ void vignette_gaussian_24_adjusted_output_hip_compute(uchar *srcPtr, d_float24 *pix_f24) { rpp_hip_math_multiply24_const(pix_f24, pix_f24, (float4)255.0f);}
-__device__ void vignette_gaussian_24_adjusted_output_hip_compute(float *srcPtr, d_float24 *pix_f24) { }
-__device__ void vignette_gaussian_24_adjusted_output_hip_compute(schar *srcPtr, d_float24 *pix_f24) { }
-__device__ void vignette_gaussian_24_adjusted_output_hip_compute(half *srcPtr, d_float24 *pix_f24) { }
-
 __device__ void vignette_gaussian_hip_compute(float &multiplier, int2 &halfDimsWH_i2, int2 &idXY_i2, d_float8 *gaussianValue_f8)
 {
     float rowLocComponent;
@@ -129,9 +109,7 @@ __global__ void vignette_pkd_tensor(T *srcPtr,
     d_float8 gaussianValue_f8;
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
     rpp_hip_load24_pkd3_and_unpack_to_float24_pln3(srcPtr + srcIdx, &src_f24);
-    vignette_gaussian_24_adjusted_input_hip_compute(srcPtr, &src_f24);
     vignette_24_hip_compute(srcPtr, &src_f24, &dst_f24, &gaussianValue_f8);
-    vignette_gaussian_24_adjusted_output_hip_compute(srcPtr, &src_f24);
     rpp_hip_pack_float24_pln3_and_store24_pkd3(dstPtr + dstIdx, &dst_f24);
 }
 
@@ -167,9 +145,7 @@ __global__ void vignette_pln_tensor(T *srcPtr,
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
 
     rpp_hip_load8_and_unpack_to_float8(srcPtr + srcIdx, &src_f8);
-    vignette_gaussian_8_adjusted_input_hip_compute(srcPtr, &src_f8);
     vignette_8_hip_compute(srcPtr, &src_f8, &dst_f8, &gaussianValue_f8);
-    vignette_gaussian_8_adjusted_output_hip_compute(srcPtr, &src_f8);
     rpp_hip_pack_float8_and_store8(dstPtr + dstIdx, &dst_f8);
 
     if (channelsDst == 3)
@@ -178,18 +154,14 @@ __global__ void vignette_pln_tensor(T *srcPtr,
         dstIdx += dstStridesNCH.y;
 
         rpp_hip_load8_and_unpack_to_float8(srcPtr + srcIdx, &src_f8);
-        vignette_gaussian_8_adjusted_input_hip_compute(srcPtr, &src_f8);
         vignette_8_hip_compute(srcPtr, &src_f8, &dst_f8, &gaussianValue_f8);
-        vignette_gaussian_8_adjusted_output_hip_compute(srcPtr, &src_f8);
         rpp_hip_pack_float8_and_store8(dstPtr + dstIdx, &dst_f8);
 
         srcIdx += srcStridesNCH.y;
         dstIdx += dstStridesNCH.y;
 
         rpp_hip_load8_and_unpack_to_float8(srcPtr + srcIdx, &src_f8);
-        vignette_gaussian_8_adjusted_input_hip_compute(srcPtr, &src_f8);
         vignette_8_hip_compute(srcPtr, &src_f8, &dst_f8, &gaussianValue_f8);
-        vignette_gaussian_8_adjusted_output_hip_compute(srcPtr, &src_f8);
         rpp_hip_pack_float8_and_store8(dstPtr + dstIdx, &dst_f8);
     }
 }
@@ -225,9 +197,7 @@ __global__ void vignette_pkd3_pln3_tensor(T *srcPtr,
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
 
     rpp_hip_load24_pkd3_and_unpack_to_float24_pln3(srcPtr + srcIdx, &src_f24);
-    vignette_gaussian_24_adjusted_input_hip_compute(srcPtr, &src_f24);
     vignette_24_hip_compute(srcPtr, &src_f24, &dst_f24, &gaussianValue_f8);
-    vignette_gaussian_24_adjusted_output_hip_compute(srcPtr, &src_f24);
     rpp_hip_pack_float24_pln3_and_store24_pln3(dstPtr + dstIdx, dstStridesNCH.y, &dst_f24);
 }
 
@@ -262,9 +232,7 @@ __global__ void vignette_pln3_pkd3_tensor(T *srcPtr,
     vignette_gaussian_hip_compute(multiplier, halfDimsWH_i2, idXY_i2, &gaussianValue_f8);
 
     rpp_hip_load24_pln3_and_unpack_to_float24_pln3(srcPtr + srcIdx, srcStridesNCH.y, &src_f24);
-    vignette_gaussian_24_adjusted_input_hip_compute(srcPtr, &src_f24);
     vignette_24_hip_compute(srcPtr, &src_f24, &dst_f24, &gaussianValue_f8);
-    vignette_gaussian_24_adjusted_output_hip_compute(srcPtr, &src_f24);
     rpp_hip_pack_float24_pln3_and_store24_pkd3(dstPtr + dstIdx, &dst_f24);
 }
 
