@@ -332,6 +332,14 @@ __global__ void resize_bilinear_pln3_pkd3_tensor(T *srcPtr,
     rpp_hip_pack_float24_pln3_and_store24_pkd3(dstPtr + dstIdx, &dst_f24);
 }
 
+__device__ __forceinline__ uint rpp_hip_pack4(float4 src)
+{
+    return __builtin_amdgcn_cvt_pk_u8_f32(src.w, 3,
+           __builtin_amdgcn_cvt_pk_u8_f32(src.z, 2,
+           __builtin_amdgcn_cvt_pk_u8_f32(src.y, 1,
+           __builtin_amdgcn_cvt_pk_u8_f32(src.x, 0, 0))));
+}
+
 template <typename T>
 __global__ void resize_generic_pkd_tensor(T *srcPtr,
                                           uint2 srcStridesNH,
@@ -341,7 +349,7 @@ __global__ void resize_generic_pkd_tensor(T *srcPtr,
                                           RpptROIPtr roiTensorPtrSrc,
                                           RpptInterpolationType interpolationType)
 {
-    int id_x = hipBlockIdx_x * hipBlockDim_x + hipThreadIdx_x;
+    int id_x = (hipBlockIdx_x * hipBlockDim_x + hipThreadIdx_x) * 8;
     int id_y = hipBlockIdx_y * hipBlockDim_y + hipThreadIdx_y;
     int id_z = hipBlockIdx_z * hipBlockDim_z + hipThreadIdx_z;
 
@@ -359,7 +367,7 @@ __global__ void resize_generic_pkd_tensor(T *srcPtr,
     srcDimsWH.x = srcRoi_i4.z - srcRoi_i4.x + 1;
     srcDimsWH.y = srcRoi_i4.w - srcRoi_i4.y + 1;
 
-    int widthLimit = srcRoi_i4.z * 3;
+    int widthLimit = (srcRoi_i4.z * 3);
     int heightLimit = srcRoi_i4.w;
     float wRatio = (float)srcDimsWH.x / (float)dstDimsWH.x;
     float hRatio = (float)srcDimsWH.y / (float)dstDimsWH.y;
@@ -374,56 +382,76 @@ __global__ void resize_generic_pkd_tensor(T *srcPtr,
 
     float rowWeight, colWeight, rowCoeff, colCoeff;
     float rowCoeffs[100], colCoeffs[100];
-    float3 coeffs_f3[100] = {(float3)0.0f};
     int srcLocationRowFloor, srcLocationColumnFloor;
-    resize_roi_generic_srcloc_and_weight_hip_compute(srcRoi_i4.x, id_x, wRatio, widthLimit, &srcLocationColumnFloor, &colWeight, wOffset, 3);
-    resize_roi_generic_srcloc_and_weight_hip_compute(srcRoi_i4.y, id_y, hRatio, heightLimit, &srcLocationRowFloor, &rowWeight, hOffset, 1);
+    d_float12 dst_f12;
+    int internalid_x = id_x;
+    
+    for(int loop=0;loop<8;loop++)
+    {
+        resize_roi_generic_srcloc_and_weight_hip_compute(srcRoi_i4.x, internalid_x, wRatio, widthLimit, &srcLocationColumnFloor, &colWeight, wOffset, 3);
+        resize_roi_generic_srcloc_and_weight_hip_compute(srcRoi_i4.y, id_y, hRatio, heightLimit, &srcLocationRowFloor, &rowWeight, hOffset, 1);
 
-    T *srcPtrTemp = srcPtr + (id_z * srcStridesNH.x);
-    float3 outPixel_f3 = (float3)0.0f;
-    float rowCoeffSum = 0.0f, colCoeffSum = 0.0f;
-    for(int j = 0; j < hKernelSize; j++)
-    {
-        rpp_hip_compute_interpolation_coefficient(interpolationType, (rowWeight - hRadius + j) * hScale , &rowCoeff);
-        rowCoeffSum += rowCoeff;
-        rowCoeffs[j] = rowCoeff;
-    }
-    for(int k = 0; k < wKernelSize; k++)
-    {
-        rpp_hip_compute_interpolation_coefficient(interpolationType, (colWeight - wRadius + k) * wScale , &colCoeff);
-        colCoeffSum += colCoeff;
-        colCoeffs[k] = colCoeff;
-    }
-    rowCoeffSum = (rowCoeffSum == 0.0f) ? 1.0f : rowCoeffSum;
-    colCoeffSum = (colCoeffSum == 0.0f) ? 1.0f : colCoeffSum;
-    for(int j = 0; j < hKernelSize; j++)
-    {
-        rowCoeffs[j] /= rowCoeffSum;
-    }
-    for(int k = 0; k < wKernelSize; k++)
-    {
-        colCoeffs[k] /= colCoeffSum;
-    }
-    for(int j = 0; j < hKernelSize; j++)
-    {
-        int rowIndex = fminf(fmaxf((int)(srcLocationRowFloor + j), 0), heightLimit);
-        T *srcRowPtrsForInterp = srcPtrTemp + rowIndex * srcStridesNH.y;
-
+        T *srcPtrTemp = srcPtr + (id_z * srcStridesNH.x);
+        float3 outPixel_f3 = (float3)0.0f;
+        float rowCoeffSum = 0.0f, colCoeffSum = 0.0f;
+        float3 coeffs_f3[100] = {(float3)0.0f};
+        for(int j = 0; j < hKernelSize; j++)
+        {
+            rpp_hip_compute_interpolation_coefficient(interpolationType, (rowWeight - hRadius + j) * hScale , &rowCoeff);
+            rowCoeffSum += rowCoeff;
+            rowCoeffs[j] = rowCoeff;
+        }
         for(int k = 0; k < wKernelSize; k++)
         {
-            int colIndex = fminf(fmaxf((int)(srcLocationColumnFloor + (k * 3)), 0), widthLimit);
-            coeffs_f3[k] += (make_float3(srcRowPtrsForInterp[colIndex], srcRowPtrsForInterp[colIndex + 1], srcRowPtrsForInterp[colIndex + 2]) * (float3)rowCoeffs[j]);
+           rpp_hip_compute_interpolation_coefficient(interpolationType, (colWeight - wRadius + k) * wScale , &colCoeff);
+           colCoeffSum += colCoeff;
+           colCoeffs[k] = colCoeff;
         }
-    }
-    for(int k = 0; k < wKernelSize; k++)
-    {
-        outPixel_f3 += coeffs_f3[k] * (float3)colCoeffs[k];
+        rowCoeffSum = (rowCoeffSum == 0.0f) ? 1.0f : rowCoeffSum;
+        colCoeffSum = (colCoeffSum == 0.0f) ? 1.0f : colCoeffSum;
+        for(int j = 0; j < hKernelSize; j++)
+        {
+            rowCoeffs[j] /= rowCoeffSum;
+        }
+        for(int k = 0; k < wKernelSize; k++)
+        {
+            colCoeffs[k] /= colCoeffSum;
+        }
+        for(int j = 0; j < hKernelSize; j++)
+        {
+            int rowIndex = fminf(fmaxf((int)(srcLocationRowFloor + j), 0), heightLimit);
+            T *srcRowPtrsForInterp = srcPtrTemp + rowIndex * srcStridesNH.y;
+    
+            for(int k = 0; k < wKernelSize; k++)
+            {
+                int colIndex = fminf(fmaxf((int)(srcLocationColumnFloor + (k * 3)), 0), widthLimit);
+                coeffs_f3[k] += (make_float3(srcRowPtrsForInterp[colIndex], srcRowPtrsForInterp[colIndex + 1], srcRowPtrsForInterp[colIndex + 2]) * (float3)rowCoeffs[j]);
+            }
+        }
+        for(int k = 0; k < wKernelSize; k++)
+        {
+            outPixel_f3 += coeffs_f3[k] * (float3)colCoeffs[k];
+        }
+        dst_f12.f1[loop*3]=nearbyintf(outPixel_f3.x);
+        dst_f12.f1[loop*3 + 1]=nearbyintf(outPixel_f3.y);
+        dst_f12.f1[loop*3 + 2]=nearbyintf(outPixel_f3.z);
+        internalid_x++;
     }
     
-    uint dstIdx = (id_z * dstStridesNH.x) + (id_y * dstStridesNH.y) + id_x * 3;
-    rpp_hip_pixel_check_and_store(nearbyintf(outPixel_f3.x), &dstPtr[dstIdx]);
-    rpp_hip_pixel_check_and_store(nearbyintf(outPixel_f3.y), &dstPtr[dstIdx + 1]);
-    rpp_hip_pixel_check_and_store(nearbyintf(outPixel_f3.z), &dstPtr[dstIdx + 2]);
+    uint dstIdx = (id_z * dstStridesNH.x) + (id_y * dstStridesNH.y) + id_x*3;
+    //rpp_hip_pixel_check_and_store(nearbyintf(outPixel_f3.x), &dstPtr[dstIdx]);
+    //rpp_hip_pixel_check_and_store(nearbyintf(outPixel_f3.y), &dstPtr[dstIdx + 1]);
+    //rpp_hip_pixel_check_and_store(nearbyintf(outPixel_f3.z), &dstPtr[dstIdx + 2]);
+    rpp_hip_pack_float24_pkd3_and_store24_pkd3(dstPtr + dstIdx, &dst_f24);
+    
+    /*d_uint3 dst_ui3;
+
+    dst_ui3.ui1[0] = rpp_hip_pack4(dst_f12.f4[0]);    // write R00G00B00R01
+    dst_ui3.ui1[1] = rpp_hip_pack4(dst_f12.f4[1]);    // write G01B01R02G02
+    dst_ui3.ui1[2] = rpp_hip_pack4(dst_f12.f4[2]);    // write B02R03G03B03
+
+    *(d_uint3_s *)dstPtr = *(d_uint3_s *)&dst_ui3;*/
+
 }
 
 template <typename T>
@@ -969,7 +997,7 @@ RppStatus hip_exec_resize_tensor(T *srcPtr,
         int localThreads_x = LOCAL_THREADS_X;
         int localThreads_y = LOCAL_THREADS_Y;
         int localThreads_z = LOCAL_THREADS_Z;
-        int globalThreads_x = dstDescPtr->w;
+        int globalThreads_x = (dstDescPtr->strides.hStride + 7) >> 3;
         int globalThreads_y = dstDescPtr->h;
         int globalThreads_z = handle.GetBatchSize();
 
